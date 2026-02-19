@@ -1,0 +1,68 @@
+﻿Testing API at http://localhost:8000...
+
+--- 1. Health Check ---
+Status: 200
+{'status': 'ok', 'service': 'InsightX API'}
+
+--- 2. Dashboard Stats ---
+Status: 200
+Total Transactions: 250000
+Success Rate: 95.0496%
+
+--- 3. Create Session ---
+Status: 200
+Created Session ID: 0157de0d-020d-4124-805c-634fb10d4eda
+
+--- 4. List Sessions ---
+Status: 200
+Sessions found: 1
+
+--- 5. Chat Turn 1 ---
+Question: Which state has the highest transaction volume?
+Status: 200
+venv\Scripts\python : 
+Traceback (most recent 
+call last):
+At line:1 char:180
++ ... eep -Seconds 10; 
+venv\Scripts\python 
+backend/test_api.py 2>&1 
+| Out-F ...
++                      ~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (T  
+  raceback (most recent   
+  call last)::String)     
+[], RemoteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+  File "D:\InsightX2\insig
+htx\backend\test_api.py", 
+line 80, in <module>
+    test_api()
+  File "D:\InsightX2\insig
+htx\backend\test_api.py", 
+line 61, in test_api
+    print(f"Answer: 
+{chat_resp['answer']}")
+  File "C:\Users\Aditya\Ap
+pData\Local\Programs\Pytho
+n\Python312\Lib\encodings\
+cp1252.py", line 19, in 
+encode
+    return codecs.charmap_
+encode(input,self.errors,e
+ncoding_table)[0]
+           ^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^
+UnicodeEncodeError: 
+'charmap' codec can't 
+encode character 
+'\U0001f4a1' in position 
+291: character maps to 
+<undefined>
