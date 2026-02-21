@@ -6,15 +6,21 @@ InsightX is an intelligent analytics platform that allows users to query UPI tra
 
 ## 🚀 Key Features
 
+### 🌟 Premium Frontend Dashboard (V4)
+- **Unified Workspace Experience**: Deep-purple accented dark theme and glassmorphism styling, featuring a collapsible side-navigation pane and seamless view switching between Chat and KPI Dashboard modes.
+- **Interactive Chat Interface**: A sticky, floating prompt input with intelligent placeholder cycling and instant slash-command suggestions (`/compare`, `/trend`, `/forecast`).
+- **Stack Execution Trace Drawer**: A right-sided slide-out drawer providing full transparency. Inspect the exact generated SQL query, view the verified origin data sources, and monitor execution metrics (latency, compute tier, confidence scores) for every query.
+- **Insight Action Rows**: Save, download as PDF, share via link, or pin generated charts directly to your Custom Dashboard.
+- **Proactive Insights System**: Data discoveries are presented cleanly with collapsible cards ("Did you know?" style insights) that don't crowd the conversation.
+
+### 🧠 Advanced Backend AI
 - **Natural Language to SQL**: Converts complex questions ("Show me fraud trends in Mumbai last week") into precise SQL queries.
 - **Multi-Step Reasoning**: Handles complex multi-part questions using recursive query decomposition.
-- **Interactive Dashboard**: Real-time KPI cards showing transaction volumes, success rates, and fraud risks.
-- **Rich Visualizations**: Auto-generated bar, line, and pie charts embedded in the chat interface.
-- **Business Intelligence**:
-  - **Business Implications**: Contextual analysis of data trends.
-  - **Proactive Insights**: "Did you know?" style discoveries found in the data.
-  - **Executive Summaries**: High-level overviews for quick decision-making.
-- **Transparent Logic**: View the generated SQL and execution steps for every answer.
+- **Business Intelligence**: Rich contextual analysis of data trends and automatic Executive Summaries for quick decision-making.
+
+### 📊 Real-time Dashboard & KPI Tracking
+- **Interactive KPI Cards**: Real-time KPI cards mapping out total transaction volume, tracking success rates, and highlighting top demographic states.
+- **Rich Visualizations**: Auto-generated Recharts components (Area, Bar, Line, and Pie charts) featuring customized gradients that match the deep-purple branding.
 
 ---
 
@@ -22,11 +28,11 @@ InsightX is an intelligent analytics platform that allows users to query UPI tra
 
 InsightX follows a clean, decoupled architecture:
 
-1.  **Frontend (Next.js 14)**:
-    - **Chat Interface**: `ChatWindow`, `MessageBubble`, `InputBar`.
-    - **Visualization**: `Recharts` for dynamic charting.
-    - **State Management**: `Zustand` for seamless session and data handling.
-    - **Styling**: `Tailwind CSS` with a custom dark mode design system.
+1.  **Frontend (Next.js 14, Tailwind V4 UI)**:
+    - **Chat Interface & Dashboard**: Contains `ChatWindow`, `KPICards`, and a responsive Slide-over Context Panel.
+    - **Visualization**: `Recharts` for dynamic charting with custom data color palettes and gradient SVGs.
+    - **State Management**: React state hooks driving conditional rendering (Chat mode vs Dashboard mode, Sidebar toggles, Theme states).
+    - **Styling**: Modern UI design system strictly utilizing CSS Variables (`globals.css`) for a comprehensive light/dark mode implementation with rich aesthetics.
 
 2.  **Backend (FastAPI)**:
     - **API Layer**: REST endpoints for chat (`/api/chat`), sessions (`/api/sessions`), and dashboard (`/api/dashboard`).
@@ -139,16 +145,17 @@ Navigate to the frontend directory.
 
 ## 🖥️ Usage Guide
 
-1.  **Dashboard**: Upon loading, you'll see a live dashboard with high-level metrics like "Total Transactions" and "Fraud Risk".
-2.  **Ask a Question**: Use the chat bar to ask questions like:
-    - _"Show me the trend of failed transactions over the last 7 days."_
-    - _"Compare the average transaction amount between iOS and Android users."_
-    - _"Which state has the highest fraud rate for P2M transactions?"_
-3.  **Interact**:
-    - Hover over charts for details.
-    - Click **"View SQL"** to see the generated code.
-    - Copy SQL queries to clipboard.
-    - Start a **"New Chat"** from the sidebar to clear context.
+1.  **Dashboard View**: Upon loading, you'll see a live dashboard with high-level KPI metrics formatted dynamically.
+2.  **Ask a Question**: Open the Chat Interface to query your data.
+    - Try Slash Commands directly from the UI dropdown: type `/trend last 7 days failed transactions`.
+    - Alternatively type in plain English: _"Compare the average transaction amount between iOS and Android users."_
+3.  **Explore the Context Drawer**:
+    - Click **"View Stack"** on any generated answer.
+    - A right-hand panel slides open showing exact SQL syntax, origin schemas, latency, and LLM compute models.
+    - Easily copy the parsed SQL representation from here.
+4.  **Interact with Insights**:
+    - Hover over beautifully rendered gradient charts for full tooltips.
+    - Expand "Proactive Insights" banners to dive deeper into automatically identified anomalies.
 
 ---
 
