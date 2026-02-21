@@ -1,0 +1,167 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg-app: var(--bg-app);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-sidebar: var(--bg-sidebar);
+  --color-bg-elevated: var(--bg-elevated);
+
+  --color-border-subtle: var(--border-subtle);
+  --color-border-medium: var(--border-medium);
+
+  --color-accent-primary: var(--accent-primary);
+  --color-accent-solid: var(--accent-solid);
+
+  --color-success-bg: var(--success-bg);
+  --color-success-border: var(--success-border);
+  --color-success-text: var(--success-text);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+}
+
+:root {
+  /* V4 Premium SaaS Design Tokens (Light Mode) */
+  --bg-app: #F5F7FA;
+  --bg-surface: #FFFFFF;
+  --bg-sidebar: #F8FAFC;
+  --bg-elevated: #FFFFFF;
+  --bg-header: rgba(255, 255, 255, 0.9);
+
+  --border-subtle: #E2E8F0;
+  --border-medium: rgba(0, 0, 0, 0.1);
+
+  --accent-primary: linear-gradient(135deg, #6366F1, #8B5CF6);
+  --accent-solid: #5B5FEF;
+  --accent-hover: #4F46E5;
+
+  --success-bg: #DCFCE7;
+  --success-border: #86EFAC;
+  --success-text: #166534;
+  --warning-text: #F59E0B;
+  --error-text: #EF4444;
+
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+  --text-disabled: #CBD5E1;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+
+.dark {
+  /* Ensure dark theme mirrors root to enforce strict global deep purple compliance */
+  --bg-app: linear-gradient(180deg, #0E0A1F 0%, #141026 100%);
+  --bg-surface: #15112B;
+  --bg-sidebar: #15112B;
+  --bg-elevated: #231C42;
+  --bg-header: rgba(20, 16, 38, 0.85);
+
+  --border-subtle: #2A2147;
+  --border-medium: #2E2550;
+
+  --accent-primary: linear-gradient(135deg, #7C3AED, #C084FC);
+  --accent-solid: #8B5CF6;
+  --accent-hover: #C084FC;
+
+  --success-bg: rgba(167, 139, 250, 0.15);
+  --success-border: #A78BFA;
+  --success-text: #A78BFA;
+  --warning-text: #FBBF24;
+  --error-text: #F87171;
+
+  --text-primary: #F5F3FF;
+  --text-secondary: #C4B5FD;
+  --text-muted: #8B85C1;
+  --text-disabled: #5B4F87;
+
+  --shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 0 20px rgba(139, 92, 246, 0.25);
+  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.6);
+}
+
+body {
+  color: var(--text-primary);
+  background-color: var(--bg-app);
+  margin: 0;
+  min-height: 100vh;
+  /* Premium System Font Stack */
+  font-family: var(--font-geist-sans), "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-medium);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 240ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes pulse-opacity {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-pulse-opacity {
+  animation: pulse-opacity 1.2s ease-in-out infinite;
+}
+
+/* Custom Gradient Background Utilities */
+.bg-app-custom {
+  background: var(--bg-app);
+}
+
+.bg-accent-primary {
+  background: var(--accent-primary);
+}
+
+/* Utility Defaults */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
