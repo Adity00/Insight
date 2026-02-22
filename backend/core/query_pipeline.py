@@ -8,6 +8,7 @@ from backend.core.database import db
 from backend.core.prompt_builder import prompt_builder
 from backend.core.session_manager import session_manager
 from backend.core.sql_validator import validator
+from backend.core.stats_engine import stats_engine
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -144,14 +145,27 @@ class QueryPipeline:
                         "is_clarification": False
                     }
 
+            # Statistical enrichment — pure computation, no API calls
+            statistical_enrichment = {}
+            try:
+                if db_result.get('data') and len(db_result['data']) >= 2:
+                    statistical_enrichment = stats_engine.enrich(
+                        data=db_result['data'],
+                        query_intent=query_intent,
+                        sql=cleaned_sql
+                    )
+            except Exception as e:
+                logger.warning(f"Stats enrichment skipped: {e}")
+
             # Step 6 — GPT-4 Pass 2 (Narration)
             narration_messages = prompt_builder.build_narration_prompt(
-                user_question, 
-                cleaned_sql, 
-                db_result, 
-                query_intent, 
-                session_ctx["entity_tracker"],
-                db.get_data_profile()
+                user_query=user_question,
+                sql_used=cleaned_sql,
+                query_result=db_result,
+                query_intent=query_intent,
+                entity_context=session_ctx["entity_tracker"],
+                data_profile=db.get_data_profile(),
+                statistical_enrichment=statistical_enrichment
             )
             
             answer_text = self._call_gpt4(narration_messages, temperature=0.3, expect_json=False)
