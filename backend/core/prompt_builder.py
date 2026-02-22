@@ -8,8 +8,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     from core.database import db
 except ImportError:
-    # Fallback for when running from root
     from backend.core.database import db
+
 
 class PromptBuilder:
     def __init__(self):
@@ -158,27 +158,26 @@ BUSINESS INTELLIGENCE REQUIREMENTS — apply to every response:
 
 CRITICAL: You are narrating ONLY from the data provided to you. Never invent
 benchmarks or averages that aren't in the data. If you cannot compute a comparison
-from the provided result, state the metric plainly without fabricating context."""
+from the provided result, state the metric plainly without fabricating context.
+
+When the statistical analysis section contains a "STATISTICAL VERDICT", you must
+open your response by restating that verdict using its exact factual claims.
+If the verdict says "NO STATISTICAL ANOMALY", you must not use the words anomalous,
+significant outlier, warrants investigation, or concerning in relation to that data.
+If the verdict says "VERIFIED STATISTICAL ANOMALY", you must use the z-score value
+provided and label it explicitly as statistically significant."""
 
         # Format data table for prompt
         data_rows = query_result.get('data', [])
         formatted_data = json.dumps(data_rows, indent=2)
 
-        user_content = ""
-        if data_profile:
-             user_content += f"""DATASET BENCHMARKS (use these for comparison):
-- Overall success rate: {data_profile.get('success_rate', 'N/A')}%
-- Overall fraud flag rate: {data_profile.get('fraud_flag_rate', 'N/A')}%
-- Average transaction amount: ₹{data_profile.get('avg_amount_inr', 'N/A')}
-- Total transactions: {data_profile.get('total_rows', 'N/A')}
-- Peak hour: {data_profile.get('peak_hour', 'N/A')}
-"""
-
-        user_content += f"""Question asked: {user_query}
+        # Assemble user_content in order: question → stats → benchmarks → data
+        user_content = f"""Question asked: {user_query}
 What was computed: {query_intent}
 """
 
-        # Statistical enrichment block — injected before data result
+        # Statistical enrichment block — injected BEFORE benchmarks so GPT-4
+        # internalises the statistical constraints before reading any numbers
         if statistical_enrichment:
             stats_block = "\n--- STATISTICAL ANALYSIS (computed from actual data, must be used) ---\n"
 
@@ -187,17 +186,6 @@ What was computed: {query_intent}
                 stats_block += f"Distribution: mean={z['mean']}, std_dev={z['std_dev']}\n"
                 stats_block += f"Highest: {z['highest']['label']} = {z['highest']['value']} (z-score: {z['highest']['z_score']})\n"
                 stats_block += f"Lowest: {z['lowest']['label']} = {z['lowest']['value']} (z-score: {z['lowest']['z_score']})\n"
-
-                if z['anomaly_count'] > 0:
-                    stats_block += f"STATISTICAL ANOMALIES FOUND ({z['anomaly_count']}):\n"
-                    for a in z['anomalies']:
-                        stats_block += (
-                            f"  - {a['label']}: {a['value']} is {abs(a['z_score'])} std devs "
-                            f"{a['direction']} mean. FLAG AS STATISTICALLY SIGNIFICANT.\n"
-                        )
-                else:
-                    stats_block += "No statistical anomalies (all values within 2 standard deviations of mean).\n"
-                    stats_block += "Do NOT call any value 'anomalous' or 'significantly higher' without z-score evidence.\n"
 
             if 'trend' in statistical_enrichment:
                 t = statistical_enrichment['trend']
@@ -216,6 +204,16 @@ What was computed: {query_intent}
                 "--- END STATISTICAL ANALYSIS ---\n"
             )
             user_content += stats_block
+
+        # Benchmarks appear AFTER stats block so constraints are read first
+        if data_profile:
+            user_content += f"""\nDATASET BENCHMARKS (use these for comparison):
+- Overall success rate: {data_profile.get('success_rate', 'N/A')}%
+- Overall fraud flag rate: {data_profile.get('fraud_flag_rate', 'N/A')}%
+- Average transaction amount: \u20b9{data_profile.get('avg_amount_inr', 'N/A')}
+- Total transactions: {data_profile.get('total_rows', 'N/A')}
+- Peak hour: {data_profile.get('peak_hour', 'N/A')}
+"""
 
         user_content += f"""Data returned:
 {formatted_data}

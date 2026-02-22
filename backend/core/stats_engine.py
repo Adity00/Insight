@@ -151,4 +151,38 @@ class StatsEngine:
             return None
 
 
+    def get_verdict(self, zscore_result: dict) -> str:
+        """
+        Returns a pre-written plain-English verdict based on z-scores.
+        This is injected into the prompt as a FACT, not an instruction.
+        GPT-4 must repeat facts; it ignores instructions.
+        """
+        if not zscore_result:
+            return ""
+
+        highest = zscore_result.get('highest', {})
+        anomalies = zscore_result.get('anomalies', [])
+        mean = zscore_result.get('mean', 0)
+        std = zscore_result.get('std_dev', 0)
+
+        if anomalies:
+            # True statistical anomaly exists
+            a = anomalies[0]
+            return (
+                f"VERIFIED STATISTICAL ANOMALY: {a['label']} with value {a['value']} "
+                f"is {abs(a['z_score'])} standard deviations {a['direction']} the mean "
+                f"({mean} \u00b1 {std}). This IS a statistically significant outlier (z > 2.0)."
+            )
+        else:
+            # No true anomaly — highest is just the highest, nothing more
+            h = highest
+            return (
+                f"NO STATISTICAL ANOMALY DETECTED. {h['label']} has the highest value "
+                f"at {h['value']} (z-score: {h['z_score']}), which is only "
+                f"{abs(h['z_score'])} standard deviations from the mean. "
+                f"This does not qualify as a statistical anomaly (threshold: z > 2.0). "
+                f"It is merely the highest value in a uniform distribution."
+            )
+
+
 stats_engine = StatsEngine()
