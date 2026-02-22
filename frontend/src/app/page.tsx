@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { api, DashboardStats } from '@/lib/api';
+import { api, DashboardStats, Session } from '@/lib/api';
 import { ChatWindow } from '@/components/ChatWindow';
 import { KPICards } from '@/components/KPICards';
 import {
@@ -12,6 +12,7 @@ import {
 export default function Home() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [sessionId, setSessionId] = useState<string>("");
+  const [sessions, setSessions] = useState<Session[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
   const [viewMode, setViewMode] = useState<'chat' | 'dashboard'>('chat');
@@ -24,6 +25,8 @@ export default function Home() {
         setStats(s);
         const { session_id } = await api.createSession();
         setSessionId(session_id);
+        const sessionsList = await api.getSessions();
+        setSessions(sessionsList);
       } catch (err) {
         console.error("Init failed:", err);
       }
@@ -59,7 +62,19 @@ export default function Home() {
           </div>
 
           <div className="p-4 flex-1 overflow-y-auto scrollbar-hide flex flex-col gap-5">
-            <button className={`flex items-center gap-[8px] w-full bg-accent-primary hover:opacity-90 text-[var(--bg-surface)] rounded-[8px] transition-all duration-200 shadow-[var(--shadow-sm)] hover:translate-y-[-1px] hover:shadow-[var(--shadow-md)] active:scale-[0.98] ${sidebarOpen ? 'px-4 py-[10px]' : 'justify-center p-3'}`}>
+            <button 
+              onClick={async () => {
+                try {
+                  const { session_id } = await api.createSession();
+                  setSessionId(session_id);
+                  const updated = await api.getSessions();
+                  setSessions(updated);
+                } catch (err) {
+                  console.error('New chat failed:', err);
+                }
+              }}
+              className={`flex items-center gap-[8px] w-full bg-accent-primary hover:opacity-90 text-[var(--bg-surface)] rounded-[8px] transition-all duration-200 shadow-[var(--shadow-sm)] hover:translate-y-[-1px] hover:shadow-[var(--shadow-md)] active:scale-[0.98] ${sidebarOpen ? 'px-4 py-[10px]' : 'justify-center p-3'}`}
+            >
               <Plus size={18} className="shrink-0" />
               {sidebarOpen && <span className="font-[600] text-[14px] truncate tracking-[-0.01em]">New Chat</span>}
             </button>
@@ -84,24 +99,43 @@ export default function Home() {
             <div className="flex flex-col gap-[4px]">
               {sidebarOpen && <p className="text-[12px] font-[500] text-[var(--text-muted)] uppercase tracking-[0.08em] mb-2 px-2 mt-4">Recent</p>}
 
-              <div className={`flex items-center justify-between rounded-[8px] transition-all p-2 bg-[var(--bg-surface)] relative overflow-hidden group cursor-pointer h-[40px] ${!sidebarOpen && 'justify-center'}`}>
-                <div className="flex items-center gap-[12px] overflow-hidden w-full">
-                  <MessageSquare size={14} className="text-[var(--accent-solid)] shrink-0" />
-                  {sidebarOpen && <span className="text-[14px] font-[500] text-[var(--accent-solid)] truncate max-w-[140px]">Demographics Analysis</span>}
+              {sessions.slice(0, 8).map((session) => (
+                <div
+                  key={session.session_id}
+                  onClick={() => setSessionId(session.session_id)}
+                  className={`flex items-center justify-between rounded-[8px] transition-all p-2 group cursor-pointer h-[40px] ${
+                    session.session_id === sessionId
+                      ? 'bg-[var(--bg-surface)] text-[var(--accent-solid)]'
+                      : 'hover:bg-[var(--bg-surface)] text-[var(--text-secondary)]'
+                  } ${!sidebarOpen && 'justify-center'}`}
+                >
+                  <div className="flex items-center gap-[12px] overflow-hidden w-full">
+                    <MessageSquare size={14} className="shrink-0" />
+                    {sidebarOpen && (
+                      <span className="text-[14px] font-[400] truncate max-w-[140px]">
+                        {session.title || `Session ${session.turn_count > 0 ? `(${session.turn_count} turns)` : '(new)'}`}
+                      </span>
+                    )}
+                  </div>
+                  {sidebarOpen && session.session_id === sessionId && (
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        await api.deleteSession(session.session_id);
+                        const updated = await api.getSessions();
+                        setSessions(updated);
+                        if (session.session_id === sessionId) {
+                          const { session_id } = await api.createSession();
+                          setSessionId(session_id);
+                        }
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-[var(--border-medium)] rounded text-[var(--text-muted)] transition-all"
+                    >
+                      <MoreVertical size={14} />
+                    </button>
+                  )}
                 </div>
-                {sidebarOpen && (
-                  <button className="opacity-0 group-hover:opacity-100 p-1 hover:bg-[var(--border-medium)] rounded text-[var(--accent-solid)] transition-all absolute right-2">
-                    <MoreVertical size={14} />
-                  </button>
-                )}
-              </div>
-
-              <div className={`flex items-center justify-between rounded-[8px] transition-all p-2 hover:bg-[var(--bg-surface)] group cursor-pointer h-[40px] ${!sidebarOpen && 'justify-center'}`}>
-                <div className="flex items-center gap-[12px] overflow-hidden w-full">
-                  <MessageSquare size={14} className="text-[var(--text-secondary)] shrink-0 group-hover:text-[var(--accent-solid)] transition-colors" />
-                  {sidebarOpen && <span className="text-[14px] font-[400] text-[var(--text-secondary)] group-hover:text-[var(--text-primary)] transition-colors truncate">Peak Hours Q2</span>}
-                </div>
-              </div>
+              ))}
             </div>
 
             <div className="flex flex-col gap-[4px] mt-2 border-t border-[var(--border-subtle)] pt-4">

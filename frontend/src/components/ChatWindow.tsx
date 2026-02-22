@@ -46,6 +46,10 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
     const [showSlashCmds, setShowSlashCmds] = useState(false);
 
     useEffect(() => {
+        setMessages([]);
+    }, [sessionId]);
+
+    useEffect(() => {
         const interval = setInterval(() => {
             setPlaceholderIdx(prev => (prev + 1) % PLACEHOLDERS.length);
         }, 4000);
@@ -463,15 +467,21 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
                                 <div className="flex flex-col gap-[12px]">
                                     <div className="flex items-center justify-between">
                                         <span className="text-[13px] font-[500] text-[var(--text-secondary)] flex items-center gap-[8px]"><Clock size={14} /> Latency</span>
-                                        <span className="text-[13px] font-[600] text-[var(--text-primary)]">~420ms</span>
+                                        <span className="text-[13px] font-[600] text-[var(--text-primary)]">
+                                            {contextPanelMsg?.execution_time_ms
+                                                ? `~${(contextPanelMsg.execution_time_ms / 1000).toFixed(1)}s`
+                                                : 'N/A'}
+                                        </span>
                                     </div>
                                     <div className="flex items-center justify-between">
                                         <span className="text-[13px] font-[500] text-[var(--text-secondary)] flex items-center gap-[8px]"><Server size={14} /> Compute Tier</span>
-                                        <span className="text-[13px] font-[600] text-[var(--text-primary)]">GPT-4.5-Turbo</span>
+                                        <span className="text-[13px] font-[600] text-[var(--text-primary)]">GPT-4 (OpenAI)</span>
                                     </div>
                                     <div className="flex items-center justify-between">
                                         <span className="text-[13px] font-[500] text-[var(--text-secondary)] flex items-center gap-[8px]"><CheckCircleIcon /> Accuracy Confidence</span>
-                                        <span className="text-[13px] font-[600] text-[var(--success-border)]">98% Strict Check</span>
+                                        <span className="text-[13px] font-[600] text-[var(--success-border)]">
+                                            SQL Validated ✓
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -479,8 +489,12 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
                             {/* Datasets Block */}
                             <div className="bg-[var(--success-bg)] bg-opacity-30 border border-[var(--success-border)] rounded-[12px] p-[16px]">
                                 <p className="text-[12px] font-[600] text-[var(--success-text)] uppercase tracking-[0.08em] mb-[8px]">Verified Origin Sources</p>
-                                <p className="text-[14px] font-[600] text-[var(--text-primary)] mb-[4px]">upidata_live_production.db</p>
-                                <p className="text-[12px] text-[var(--text-secondary)] leading-[18px]">Partition filters automatically verified bounded to Q3 ranges.</p>
+                                <p className="text-[14px] font-[600] text-[var(--text-primary)] mb-[4px]">
+                                    upi_transactions_2024.db
+                                </p>
+                                <p className="text-[12px] text-[var(--text-secondary)] leading-[18px]">
+                                    250,000 synthetic UPI transactions. SQL verified before execution.
+                                </p>
                             </div>
 
                             {/* SQL Block */}
