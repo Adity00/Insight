@@ -8,8 +8,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     from core.database import db
 except ImportError:
-    # Fallback for when running from root
     from backend.core.database import db
+
 
 class PromptBuilder:
     def __init__(self):
@@ -35,6 +35,27 @@ CRITICAL SQL RULES — follow these exactly:
 8. Limit results to 20 rows maximum unless the user asks for all data.
 9. Round decimal results to 2 decimal places using ROUND(value, 2).
 10. fraud_flag = 1 means flagged for review, NOT confirmed fraud.
+11. NEVER refuse a query or claim data is unavailable if the relevant column exists in the schema above. Columns device_type, network_type, sender_bank, sender_state, sender_age_group, transaction_type, merchant_category all exist and are always queryable.
+12. If a query asks to "compare" any two or more groups — always use GROUP BY on the grouping column and compute the metric for each group. A comparison query ALWAYS produces multiple rows, one per group.
+13. When computing fraud flag rate for a FILTERED subset (e.g., high-value transactions), always use: SUM(fraud_flag) * 100.0 / COUNT(*) where COUNT(*) is the count of rows IN THAT FILTERED SUBSET, not the total table. Never divide by a hardcoded number or a subquery count of the full table.
+14. When asked for top N states/banks/categories by volume or count, use ORDER BY count DESC LIMIT N. Never use HAVING or WHERE to filter by count unless the user explicitly asks for a threshold. The LIMIT clause alone is sufficient.
+15. In compound or follow-up queries about a specific entity (state, bank, category), ALL metrics including fraud_flag rate must be computed within a WHERE clause filtering to that entity. Never compute a rate using the full table denominator when the question is about a specific subset.
+
+FEW-SHOT EXAMPLES (SQL correctness reference):
+-- Correct: fraud rate for high-value transactions
+SELECT ROUND(SUM(fraud_flag) * 100.0 / COUNT(*), 4) as fraud_rate
+FROM transactions
+WHERE amount_inr > 10000
+
+-- WRONG (do not do this):
+-- SELECT COUNT(*) FILTER (WHERE fraud_flag=1) * 100.0 / (SELECT COUNT(*) FROM transactions)
+
+-- Correct: top 5 states by transaction count
+SELECT sender_state, COUNT(*) as cnt
+FROM transactions
+GROUP BY sender_state
+ORDER BY cnt DESC
+LIMIT 5
 
 RESPONSE FORMAT — Critical:
 Respond with ONLY a valid JSON object. No explanation, no markdown, no code blocks.
@@ -93,7 +114,7 @@ STRICT CONTEXT RULES — follow these without exception:
         
         return messages
 
-    def build_narration_prompt(self, user_query: str, sql_used: str, query_result: Dict, query_intent: str, entity_context: Dict, data_profile: Dict = None) -> List[Dict]:
+    def build_narration_prompt(self, user_query: str, sql_used: str, query_result: Dict, query_intent: str, entity_context: Dict, data_profile: Dict = None, statistical_enrichment: Dict = None) -> List[Dict]:
         """
         Constructs the prompt for GPT-4 to explain the data insights.
         """
@@ -137,25 +158,64 @@ BUSINESS INTELLIGENCE REQUIREMENTS — apply to every response:
 
 CRITICAL: You are narrating ONLY from the data provided to you. Never invent
 benchmarks or averages that aren't in the data. If you cannot compute a comparison
-from the provided result, state the metric plainly without fabricating context."""
+from the provided result, state the metric plainly without fabricating context.
+
+When the statistical analysis section contains a "STATISTICAL VERDICT", you must
+open your response by restating that verdict using its exact factual claims.
+If the verdict says "NO STATISTICAL ANOMALY", you must not use the words anomalous,
+significant outlier, warrants investigation, or concerning in relation to that data.
+If the verdict says "VERIFIED STATISTICAL ANOMALY", you must use the z-score value
+provided and label it explicitly as statistically significant."""
 
         # Format data table for prompt
         data_rows = query_result.get('data', [])
         formatted_data = json.dumps(data_rows, indent=2)
 
-        user_content = ""
+        # Assemble user_content in order: question → stats → benchmarks → data
+        user_content = f"""Question asked: {user_query}
+What was computed: {query_intent}
+"""
+
+        # Statistical enrichment block — injected BEFORE benchmarks so GPT-4
+        # internalises the statistical constraints before reading any numbers
+        if statistical_enrichment:
+            stats_block = "\n--- STATISTICAL ANALYSIS (computed from actual data, must be used) ---\n"
+
+            if 'zscore' in statistical_enrichment:
+                z = statistical_enrichment['zscore']
+                stats_block += f"Distribution: mean={z['mean']}, std_dev={z['std_dev']}\n"
+                stats_block += f"Highest: {z['highest']['label']} = {z['highest']['value']} (z-score: {z['highest']['z_score']})\n"
+                stats_block += f"Lowest: {z['lowest']['label']} = {z['lowest']['value']} (z-score: {z['lowest']['z_score']})\n"
+
+            if 'trend' in statistical_enrichment:
+                t = statistical_enrichment['trend']
+                stats_block += f"Trend: {t['direction']} {t['magnitude']} "
+                stats_block += f"({t['pct_change_per_unit']}% change per unit, "
+                stats_block += f"total change {t['total_change_pct']}% from {t['first_value']} to {t['last_value']})\n"
+
+            if 'correlation_note' in statistical_enrichment:
+                stats_block += f"Correlation context: {statistical_enrichment['correlation_note']}\n"
+
+            stats_block += (
+                "INSTRUCTION: Incorporate ALL statistical findings above. "
+                "Use z-score values when describing outliers. "
+                "State trend direction and magnitude explicitly for time-series data. "
+                "Never describe a value as anomalous unless z-score > 2.0 is confirmed above.\n"
+                "--- END STATISTICAL ANALYSIS ---\n"
+            )
+            user_content += stats_block
+
+        # Benchmarks appear AFTER stats block so constraints are read first
         if data_profile:
-             user_content += f"""DATASET BENCHMARKS (use these for comparison):
+            user_content += f"""\nDATASET BENCHMARKS (use these for comparison):
 - Overall success rate: {data_profile.get('success_rate', 'N/A')}%
 - Overall fraud flag rate: {data_profile.get('fraud_flag_rate', 'N/A')}%
-- Average transaction amount: ₹{data_profile.get('avg_amount_inr', 'N/A')}
+- Average transaction amount: \u20b9{data_profile.get('avg_amount_inr', 'N/A')}
 - Total transactions: {data_profile.get('total_rows', 'N/A')}
 - Peak hour: {data_profile.get('peak_hour', 'N/A')}
 """
 
-        user_content += f"""Question asked: {user_query}
-What was computed: {query_intent}
-Data returned:
+        user_content += f"""Data returned:
 {formatted_data}
 Total rows: {query_result.get('row_count', 0)}
 

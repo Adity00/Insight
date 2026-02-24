@@ -12,10 +12,26 @@ logger = logging.getLogger(__name__)
 class DatabaseManager:
     def __init__(self):
         load_dotenv()
-        self.csv_path = os.getenv("CSV_PATH", "backend/data/upi_transactions_2024.csv")
+        self.csv_path = os.getenv(
+            "CSV_PATH",
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "data",
+                "upi_transactions_2024.csv"
+            )
+        )
         self.connection = duckdb.connect(database=':memory:')
         self.data_profile = {}
+        self._initialized = False
+
+    def initialize(self) -> None:
+        """Load CSV data into DuckDB and compute data profile.
+        Safe to call from notebooks without a running FastAPI server.
+        Idempotent — calling twice re-initializes cleanly.
+        """
         self._load_data()
+        self._initialized = True
         
     def _load_data(self):
         # Handle path resolution if running from root or backend
@@ -211,12 +227,10 @@ Important query rules:
     def get_data_profile(self) -> dict:
         return self.data_profile
 
-# Singleton instance
+# Singleton — auto-initializes at import time
+db = DatabaseManager()
 try:
-    db = DatabaseManager()
-except FileNotFoundError:
-    # Allow import even if DB init fails (e.g. during tests without CSV)
-    # But ideally it should fail if critical
-    # Set to None or handle gracefully if desired, but user asked for simple singleton
-    logger.warning("DatabaseManager failed to initialize (likely missing CSV). db will be None.")
-    db = None
+    db.initialize()
+except Exception as e:
+    import logging as _logging
+    _logging.getLogger(__name__).warning(f"DB auto-init failed: {e}")

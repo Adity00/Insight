@@ -1,0 +1,31 @@
+app = "insightx-backend"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+  CSV_PATH = "/app/data/upi_transactions_2024.csv"
+  DB_PATH = "/app/data/insightx.db"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[mounts]]
+  source = "insightx_data"
+  destination = "/app/data"
+
+[checks]
+  [checks.health]
+    grace_period = "30s"
+    interval = "15s"
+    method = "GET"
+    path = "/health"
+    port = 8080
+    timeout = "10s"
+    type = "http"
