@@ -6,12 +6,12 @@ What's Valid And Worth Doing Now
 These are real bugs with real score impact, low effort, and your system doesn't already handle them:
 ✅ Section 2.4 — Column-value enum mapping
 This is genuinely missing. GPT-4 sometimes writes transaction_type = 'P2P Transfer' instead of 'P2P'. Adding the enum block takes 15 minutes and prevents a class of SQL errors. Do this.
-✅ Section 2.2 — Query classification for non-data queries
-If a judge types "What is UPI?" or "Hello" during the demo and your system crashes or returns garbage SQL, that's visible and embarrassing. Rule-based heuristics only — no extra GPT call needed. Do this.
+✅ Section 2.2 — Query classification for non-data queries [This issue is resolved]
+If a judge types "What is UPI?" or "Hello" during the demo and your system crashes or returns garbage SQL, that's visible and embarrassing. Rule-based heuristics only — no extra GPT call needed. Do this. [This issue is resolved]
 ✅ Section 13.4 — Timeout handling
-Q18 took 40-60 seconds. Adding a 15-second timeout per GPT call prevents the app from hanging silently. Do this, it's one line.
+Q18 took 40-60 seconds. Adding a 15-second timeout per GPT call prevents the app from hanging silently. Do this, it's one line. [This issue is resolved]
 ✅ Section 2.1 — Few-shot examples (partial)
-Not all 10 examples, but 3 targeted ones: percentage calculation, follow-up with context, NULL-aware query. These directly address errors we saw in testing. Do 3 examples only.
+Not all 10 examples, but 3 targeted ones: percentage calculation, follow-up with context, NULL-aware query. These directly address errors we saw in testing. Do 3 examples only. [This issue is resolved]
 
 What's Valid But Not Worth Doing Now
 These are real problems but the effort vs. score impact ratio is wrong for 5 days:

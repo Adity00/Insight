@@ -10,6 +10,17 @@ try:
 except ImportError:
     from backend.core.database import db
 
+VALID_ENUM_REFERENCE = """VALID ENUM VALUES (use these EXACTLY — do not paraphrase):
+- transaction_type: 'P2P', 'P2M', 'Bill Payment', 'Recharge'
+- transaction_status: 'SUCCESS', 'FAILED'
+- sender_age_group: '18-25', '26-35', '36-45', '46-55', '56+'
+- device_type: 'Android', 'iOS', 'Web'
+- network_type: '4G', '5G', 'WiFi', '3G'
+- sender_bank: 'SBI', 'HDFC', 'ICICI', 'Axis', 'PNB', 'Kotak', 'IndusInd', 'Yes Bank'
+- day_of_week: 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+- fraud_flag: 0, 1
+- is_weekend: 0, 1"""
+
 
 class PromptBuilder:
     def __init__(self):
@@ -19,10 +30,15 @@ class PromptBuilder:
         """
         Constructs the prompt for GPT-4 to generate DuckDB SQL from natural language.
         """
+        enum_block = ""
+        if "VALID ENUM VALUES" not in (self.schema or ""):
+            enum_block = f"\n\n{VALID_ENUM_REFERENCE}\n"
+
         system_content = f"""You are an expert data analyst for a UPI digital payments platform in India.
 Your job is to convert natural language questions into precise DuckDB SQL queries.
 
 {self.schema}
+{enum_block}
 
 CRITICAL SQL RULES — follow these exactly:
 1. Only write SELECT statements. Never write INSERT, UPDATE, DELETE, DROP, or any mutating SQL.
@@ -41,21 +57,58 @@ CRITICAL SQL RULES — follow these exactly:
 14. When asked for top N states/banks/categories by volume or count, use ORDER BY count DESC LIMIT N. Never use HAVING or WHERE to filter by count unless the user explicitly asks for a threshold. The LIMIT clause alone is sufficient.
 15. In compound or follow-up queries about a specific entity (state, bank, category), ALL metrics including fraud_flag rate must be computed within a WHERE clause filtering to that entity. Never compute a rate using the full table denominator when the question is about a specific subset.
 
-FEW-SHOT EXAMPLES (SQL correctness reference):
--- Correct: fraud rate for high-value transactions
-SELECT ROUND(SUM(fraud_flag) * 100.0 / COUNT(*), 4) as fraud_rate
-FROM transactions
-WHERE amount_inr > 10000
+FEW-SHOT EXAMPLES (follow this style exactly):
+Example 1 — Percentage calculation (failure rate per bank)
+Question: "Which bank has the highest failure rate?"
+Expected JSON:
+{{
+  "sql": "SELECT sender_bank, ROUND(SUM(CASE WHEN transaction_status = 'FAILED' THEN 1.0 ELSE 0 END) * 100.0 / COUNT(*), 2) AS failure_rate FROM transactions GROUP BY sender_bank ORDER BY failure_rate DESC LIMIT 20",
+  "query_intent": "Compute failure rate (%) by sender bank and rank descending",
+  "entities_extracted": {{
+    "transaction_types": [],
+    "states": [],
+    "age_groups": [],
+    "time_filters": {{}},
+    "metric": "failure_rate"
+  }},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
 
--- WRONG (do not do this):
--- SELECT COUNT(*) FILTER (WHERE fraud_flag=1) * 100.0 / (SELECT COUNT(*) FROM transactions)
+Example 2 — Follow-up with context (use context entities; do not broaden)
+Context: {{ "states": ["Maharashtra"] }}
+Question: "What is the fraud flag rate there?"
+Expected JSON:
+{{
+  "sql": "SELECT ROUND(SUM(fraud_flag) * 100.0 / COUNT(*), 2) AS fraud_flag_rate FROM transactions WHERE sender_state IN ('Maharashtra')",
+  "query_intent": "Compute fraud flag rate (%) for Maharashtra",
+  "entities_extracted": {{
+    "transaction_types": [],
+    "states": ["Maharashtra"],
+    "age_groups": [],
+    "time_filters": {{}},
+    "metric": "fraud_flag_rate"
+  }},
+  "requires_chart": false,
+  "suggested_chart_type": "none"
+}}
 
--- Correct: top 5 states by transaction count
-SELECT sender_state, COUNT(*) as cnt
-FROM transactions
-GROUP BY sender_state
-ORDER BY cnt DESC
-LIMIT 5
+Example 3 — NULL-aware query (merchant category)
+Question: "What is the average amount per merchant category?"
+Expected JSON:
+{{
+  "sql": "SELECT merchant_category, ROUND(AVG(amount_inr), 2) AS avg_amount_inr FROM transactions WHERE merchant_category IS NOT NULL GROUP BY merchant_category ORDER BY avg_amount_inr DESC LIMIT 20",
+  "query_intent": "Compute average transaction amount by merchant category (excluding NULL categories)",
+  "entities_extracted": {{
+    "transaction_types": [],
+    "states": [],
+    "age_groups": [],
+    "time_filters": {{}},
+    "metric": "avg_amount_inr"
+  }},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
 
 RESPONSE FORMAT — Critical:
 Respond with ONLY a valid JSON object. No explanation, no markdown, no code blocks.
