@@ -1,6 +1,11 @@
 from fastapi import APIRouter
-from backend.models.schemas import DashboardResponse
-from backend.core.database import db
+
+try:
+    from backend.models.schemas import DashboardResponse
+    from backend.core.database import db
+except ImportError:
+    from models.schemas import DashboardResponse
+    from core.database import db
 
 router = APIRouter()
 

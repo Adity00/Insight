@@ -1,0 +1,15 @@
+__pycache__
+*.pyc
+*.pyo
+.env
+.env.*
+venv/
+.venv/
+.git
+.gitignore
+node_modules
+notebooks/
+tests/
+data/upi_transactions_2024.csv
+data/insightx_sessions.db
+data/insightx.db

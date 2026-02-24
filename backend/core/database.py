@@ -12,7 +12,15 @@ logger = logging.getLogger(__name__)
 class DatabaseManager:
     def __init__(self):
         load_dotenv()
-        self.csv_path = os.getenv("CSV_PATH", "backend/data/upi_transactions_2024.csv")
+        self.csv_path = os.getenv(
+            "CSV_PATH",
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "data",
+                "upi_transactions_2024.csv"
+            )
+        )
         self.connection = duckdb.connect(database=':memory:')
         self.data_profile = {}
         self._initialized = False

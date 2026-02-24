@@ -26,6 +26,9 @@ class SessionListItem(BaseModel):
     last_active: str
     turn_count: int
 
+class SessionRenameRequest(BaseModel):
+    title: str
+
 class DashboardResponse(BaseModel):
     total_transactions: int
     success_rate: float

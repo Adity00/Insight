@@ -32,6 +32,17 @@ export interface Session {
   title?: string;
 }
 
+export interface TurnRecord {
+  turn_id: number;
+  session_id: string;
+  role: string;
+  content: string;
+  sql_used?: string;
+  execution_time_ms?: number;
+  chart?: any;
+  timestamp: string;
+}
+
 export const api = {
   async getDashboard(): Promise<DashboardStats> {
     const res = await fetch(`${BASE_URL}/api/dashboard`);
@@ -55,6 +66,15 @@ export const api = {
     await fetch(`${BASE_URL}/api/sessions/${sessionId}`, { method: 'DELETE' });
   },
 
+  async renameSession(sessionId: string, newTitle: string): Promise<void> {
+    const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: newTitle }),
+    });
+    if (!res.ok) throw new Error('Session rename failed');
+  },
+
   async askQuestion(question: string, sessionId: string): Promise<ChatMessage> {
     const res = await fetch(`${BASE_URL}/api/chat`, {
       method: 'POST',
@@ -63,5 +83,12 @@ export const api = {
     });
     if (!res.ok) throw new Error('Chat request failed');
     return res.json();
+  },
+
+  async getSessionMessages(sessionId: string): Promise<TurnRecord[]> {
+    const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}/messages`);
+    if (!res.ok) throw new Error('Failed to fetch messages');
+    const data = await res.json();
+    return data.messages || [];
   }
 };

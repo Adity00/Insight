@@ -8,8 +8,10 @@ import {
     Share, LayoutDashboard, ThumbsUp, ThumbsDown, Database,
     Clock, Code2, Server, TerminalSquare
 } from 'lucide-react';
-import { api, ChatMessage } from '@/lib/api';
+import { api, ChatMessage, TurnRecord } from '@/lib/api';
 import { Visualizations } from '@/components/Visualizations';
+import toast, { Toaster } from 'react-hot-toast';
+import { jsPDF } from 'jspdf';
 
 interface Message extends ChatMessage {
     role: 'user' | 'assistant';
@@ -32,6 +34,292 @@ const SLASH_COMMANDS = [
     { cmd: '/demographics', desc: 'Break down by age and gender groups' }
 ];
 
+const MessageActionRow = ({ msg, question }: { msg: Message; question?: string }) => {
+    const [saving, setSaving] = useState(false);
+    const [downloading, setDownloading] = useState(false);
+    const [pinning, setPinning] = useState(false);
+    const [pinned, setPinned] = useState(false);
+    const [feedback, setFeedback] = useState<'like' | 'dislike' | null>(null);
+    const [feedbackLoading, setFeedbackLoading] = useState(false);
+
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            const saved = JSON.parse(localStorage.getItem('saved_insights') || '[]');
+            if (!saved.find((s: any) => s.id === msg.id)) {
+                saved.push(msg);
+                localStorage.setItem('saved_insights', JSON.stringify(saved));
+            }
+            toast.success('Insight Saved Successfully');
+        } catch (error) {
+            toast.error('Something went wrong. Please try again.');
+        } finally {
+            setTimeout(() => setSaving(false), 2000); // disable for 2s
+        }
+    };
+
+    const handleDownloadPDF = async () => {
+        setDownloading(true);
+        toast('PDF Download Started', { icon: '⏳' });
+        try {
+            // A4 size in points
+            const doc = new jsPDF({ format: 'a4', unit: 'pt' });
+            const pageWidth = doc.internal.pageSize.getWidth();
+            const pageHeight = doc.internal.pageSize.getHeight();
+            const marginX = 50;
+            const marginY = 40;
+            const contentWidth = pageWidth - marginX * 2;
+            let yPos = marginY;
+
+            // Helper to handle auto page breaks safely
+            const checkPageBreak = (neededHeight: number) => {
+                if (yPos + neededHeight > pageHeight - marginY - 30) {
+                    doc.addPage();
+                    yPos = marginY;
+                }
+            };
+
+            // 1. Cover Header
+            doc.setFontSize(24);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(30, 30, 30);
+            doc.text("InsightX Analysis Report", pageWidth / 2, yPos, { align: "center" });
+            yPos += 20;
+
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(100, 100, 100);
+            doc.text("Engine: InsightX Data Analysis Protocol", pageWidth / 2, yPos, { align: "center" });
+            yPos += 20;
+
+            // Thin divider line
+            doc.setDrawColor(230, 230, 230);
+            doc.setLineWidth(1);
+            doc.line(marginX, yPos, pageWidth - marginX, yPos);
+            yPos += 35;
+
+            // 2. User Question Section
+            const userQ = question || msg.query_intent || "Data Query";
+            checkPageBreak(80);
+            doc.setFontSize(16);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(40, 40, 40);
+            doc.text("User Question", marginX, yPos);
+            yPos += 15;
+
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "italic");
+            doc.setTextColor(60, 60, 60);
+            const qLines = doc.splitTextToSize(userQ, contentWidth - 30);
+            const boxHeight = (qLines.length * 16) + 24;
+
+            doc.setFillColor(248, 250, 252); // subtle gray-blue
+            doc.setDrawColor(226, 232, 240);
+            doc.roundedRect(marginX, yPos, contentWidth, boxHeight, 6, 6, 'FD');
+
+            yPos += 12 + 8; // padding + half font adjustment
+            doc.text(qLines, marginX + 15, yPos);
+            yPos += boxHeight - 20 + 35;
+
+            // 3. Section Renderers
+            const drawSectionHeader = (title: string) => {
+                checkPageBreak(40);
+                yPos += 10;
+                doc.setFontSize(16);
+                doc.setFont("helvetica", "bold");
+                doc.setTextColor(30, 30, 30);
+                doc.text(title, marginX, yPos);
+                yPos += 10;
+
+                doc.setDrawColor(240, 240, 240);
+                doc.setLineWidth(1);
+                doc.line(marginX, yPos, marginX + Math.min(contentWidth, doc.getTextWidth(title) + 20), yPos);
+                yPos += 18;
+            };
+
+            const renderMarkdownText = (text: string) => {
+                doc.setFontSize(11);
+                doc.setTextColor(60, 60, 60);
+                const lines = doc.splitTextToSize(text, contentWidth);
+                let isBoldState = false;
+
+                lines.forEach((line: string) => {
+                    checkPageBreak(25);
+                    let currentX = marginX;
+                    const isBullet = line.trim().startsWith('•') || line.trim().startsWith('-');
+                    if (isBullet) {
+                        currentX += 15;
+                    }
+
+                    if (line.includes(': ') && !line.includes('**') && line.split(':')[0].length < 35) {
+                        const parts = line.split(/:(.*)/);
+                        doc.setFont("helvetica", "bold");
+                        doc.setTextColor(30, 30, 30);
+                        doc.text(parts[0] + ':', currentX, yPos);
+                        doc.setFont("helvetica", "normal");
+                        doc.setTextColor(60, 60, 60);
+                        if (parts[1]) doc.text(parts[1], currentX + doc.getTextWidth(parts[0] + ': '), yPos);
+                    } else {
+                        const tokens = line.split(/(\*\*)/g);
+                        for (let t of tokens) {
+                            if (t === '**') {
+                                isBoldState = !isBoldState;
+                            } else if (t.length > 0) {
+                                doc.setFont("helvetica", isBoldState ? "bold" : "normal");
+                                doc.setTextColor(isBoldState ? 30 : 60, isBoldState ? 30 : 60, isBoldState ? 30 : 60);
+                                doc.text(t, currentX, yPos);
+                                currentX += doc.getTextWidth(t);
+                            }
+                        }
+                    }
+                    yPos += 18; // 1.6 line height approx
+                });
+                yPos += 12; // block spacing
+            };
+
+            // 4. Parse & Render Content Blocks
+            const rawBlocks = msg.answer.split('\n\n').filter(b => b.trim());
+
+            rawBlocks.forEach((block, index) => {
+                block = block.replace(/\n- /g, '\n• '); // standardize bullets
+
+                let title = "";
+                if (block.toLowerCase().includes('business implication:') || block.toLowerCase().includes('executive summary:')) {
+                    title = "Strategic Business Recommendations";
+                    block = block.replace(/Business Implication:/i, '').replace(/Executive Summary:/i, '').trim();
+                } else if (index === 0) {
+                    title = "Executive Summary";
+                } else if (block.includes('•') && (block.includes('%') || block.match(/\d/))) {
+                    title = "Key Metrics & Performance Insights";
+                } else {
+                    title = "Detailed Analysis";
+                }
+
+                drawSectionHeader(title);
+                renderMarkdownText(block);
+            });
+
+            if (msg.proactive_insight) {
+                drawSectionHeader("Proactive Strategic Insight");
+                renderMarkdownText("• " + msg.proactive_insight.replace('⚠️ Note:', '').replace('📊', '').trim());
+            }
+
+            // 5. Add Footers on all pages
+            const pageCount = (doc.internal as any).getNumberOfPages();
+            const datePrinted = new Date().toLocaleDateString();
+
+            for (let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(9);
+                doc.setFont("helvetica", "normal");
+                doc.setTextColor(150, 150, 150);
+
+                doc.setDrawColor(230, 230, 230);
+                doc.line(marginX, pageHeight - marginY, pageWidth - marginX, pageHeight - marginY);
+
+                doc.text(`Generated by InsightX Engine  |  ${datePrinted}`, marginX, pageHeight - marginY + 15);
+                const pageNum = `Page ${i} of ${pageCount}`;
+                doc.text(pageNum, pageWidth - marginX - doc.getTextWidth(pageNum), pageHeight - marginY + 15);
+            }
+
+            // 6. Dynamic File Naming
+            const now = new Date();
+            const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            const safeName = userQ.toLowerCase()
+                .replace(/[^a-z0-9\s]/g, '')
+                .trim()
+                .split(/\s+/)
+                .slice(0, 10)
+                .join('-');
+
+            const filename = `${safeName}-${dateStr}.pdf`;
+
+            doc.save(filename);
+            toast.success("PDF Downloaded");
+        } catch (error) {
+            console.error(error);
+            toast.error('Something went wrong. Please try again.');
+        } finally {
+            setDownloading(false);
+        }
+    };
+
+    const handlePin = async () => {
+        if (pinned) return;
+        setPinning(true);
+        try {
+            const pinnedList = JSON.parse(localStorage.getItem('pinned_insights') || '[]');
+            if (!pinnedList.find((s: any) => s.id === msg.id)) {
+                pinnedList.push(msg);
+                localStorage.setItem('pinned_insights', JSON.stringify(pinnedList));
+            }
+            setPinned(true);
+            toast.success('Pinned to Dashboard');
+        } catch (error) {
+            toast.error('Something went wrong. Please try again.');
+        } finally {
+            setPinning(false);
+        }
+    };
+
+    const handleLink = async () => {
+        try {
+            const url = new URL(window.location.href);
+            url.searchParams.set('insight', msg.id);
+            await navigator.clipboard.writeText(url.toString());
+            toast.success('Link Copied to Clipboard');
+        } catch (error) {
+            toast.error('Something went wrong. Please try again.');
+        }
+    };
+
+    const handleFeedback = async (type: 'like' | 'dislike') => {
+        const isToggle = feedback === type;
+        const newFeedback = isToggle ? null : type;
+        setFeedbackLoading(true);
+        try {
+            await fetch('/api/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ insightId: msg.id, type: newFeedback })
+            }).catch(() => { }); // Catch separately so UI updates regardless of backend presence
+
+            setFeedback(newFeedback);
+        } catch (error) {
+            toast.error('Something went wrong. Please try again.');
+        } finally {
+            setFeedbackLoading(false);
+        }
+    };
+
+    return (
+        <div className="mt-[32px] flex flex-wrap items-center justify-between border-t border-[var(--border-subtle)] pt-[24px]">
+            <div className="flex items-center gap-[12px]">
+                <button disabled={saving} onClick={handleSave} aria-label="Save Insight" className="h-[36px] px-[16px] font-[500] rounded-[8px] border border-[var(--border-subtle)] text-[13px] text-[var(--text-secondary)] hover:bg-app-custom hover:text-[var(--text-primary)] transition-all flex items-center gap-[8px] hover:translate-y-[-1px] shadow-[0_1px_2px_rgba(0,0,0,0.02)] disabled:opacity-50">
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
+                </button>
+                <button disabled={downloading} onClick={handleDownloadPDF} aria-label="Export as PDF" className="h-[36px] px-[16px] font-[500] rounded-[8px] border border-[var(--border-subtle)] text-[13px] text-[var(--text-secondary)] hover:bg-app-custom hover:text-[var(--text-primary)] transition-all flex items-center gap-[8px] hover:translate-y-[-1px] shadow-[0_1px_2px_rgba(0,0,0,0.02)] disabled:opacity-50">
+                    {downloading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Result as PDF
+                </button>
+                <button disabled={pinning || pinned} onClick={handlePin} aria-label="Pin to Dashboard" className={`h-[36px] px-[16px] font-[500] rounded-[8px] border border-[var(--border-subtle)] text-[13px] transition-all flex items-center gap-[8px] shadow-[0_1px_2px_rgba(0,0,0,0.02)] disabled:opacity-50 ${pinned ? 'bg-[var(--accent-solid)] text-white border-[var(--accent-solid)] hover:text-white' : 'text-[var(--text-secondary)] hover:bg-app-custom hover:text-[var(--text-primary)] hover:translate-y-[-1px]'}`}>
+                    {pinning ? <Loader2 size={14} className="animate-spin" /> : <LayoutDashboard size={14} />} {pinned ? 'Pinned' : 'Pin to Dash'}
+                </button>
+                <button onClick={handleLink} aria-label="Copy Link" className="h-[36px] px-[16px] font-[500] rounded-[8px] border border-[var(--border-subtle)] text-[13px] text-[var(--text-secondary)] hover:bg-app-custom hover:text-[var(--text-primary)] transition-all flex items-center gap-[8px] hover:translate-y-[-1px] shadow-[0_1px_2px_rgba(0,0,0,0.02)] disabled:opacity-50">
+                    <Share size={14} /> Link
+                </button>
+            </div>
+            <div className="flex items-center gap-[4px] text-[var(--text-muted)] group/feedback">
+                <button disabled={feedbackLoading} onClick={() => handleFeedback('like')} aria-label="Like" className={`p-2 rounded-[6px] transition-colors ${feedback === 'like' ? 'text-[var(--success-text)] bg-[var(--success-bg)]' : feedback === 'dislike' ? 'opacity-30' : 'hover:bg-app-custom hover:text-[var(--text-primary)]'}`} title="Accurate Response">
+                    {feedbackLoading && feedback === 'like' ? <Loader2 size={16} className="animate-spin" /> : <ThumbsUp size={16} />}
+                </button>
+                <button disabled={feedbackLoading} onClick={() => handleFeedback('dislike')} aria-label="Dislike" className={`p-2 rounded-[6px] transition-colors ${feedback === 'dislike' ? 'text-[var(--error-text)] bg-red-100' : feedback === 'like' ? 'opacity-30' : 'hover:bg-app-custom hover:text-[var(--text-primary)]'}`} title="Incorrect Context">
+                    {feedbackLoading && feedback === 'dislike' ? <Loader2 size={16} className="animate-spin" /> : <ThumbsDown size={16} />}
+                </button>
+            </div>
+        </div>
+    );
+};
+
 export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
@@ -45,9 +333,45 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
     const [contextPanelMsg, setContextPanelMsg] = useState<Message | null>(null);
     const [showSlashCmds, setShowSlashCmds] = useState(false);
 
+    const [historyLoading, setHistoryLoading] = useState(false);
+
+
     useEffect(() => {
+        if (!sessionId) return;
+
+        let cancelled = false;
+
         setMessages([]);
+        setHistoryLoading(true);
+
+        api.getSessionMessages(sessionId)
+            .then((turns: TurnRecord[]) => {
+                if (cancelled) return;
+                if (turns.length > 0) {
+                    const restored: Message[] = turns.map((t, idx) => ({
+                        role: t.role as 'user' | 'assistant',
+                        id: `restored-${t.turn_id || idx}`,
+                        answer: t.content,
+                        sql_used: t.sql_used || undefined,
+                        chart: t.chart || undefined,
+                        execution_time_ms: t.execution_time_ms || undefined,
+                        is_clarification: false,
+                    }));
+                    setMessages(restored);
+                } else {
+                    setMessages([]);
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setMessages([]);
+            })
+            .finally(() => {
+                if (!cancelled) setHistoryLoading(false);
+            });
+
+        return () => { cancelled = true; };
     }, [sessionId]);
+
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -84,6 +408,9 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
         const textToSend = overrideText || input;
         if (!textToSend.trim() || loading || !sessionId) return;
 
+        // Capture current session to detect stale updates after a switch
+        const currentSessionId = sessionId;
+
         const userMsg: Message = {
             role: 'user',
             id: Date.now().toString(),
@@ -101,7 +428,9 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
         setLoading(true);
 
         try {
-            const response = await api.askQuestion(textToSend, sessionId);
+            const response = await api.askQuestion(textToSend, currentSessionId);
+            // Abort if user has switched to a different session while waiting
+            if (currentSessionId !== sessionId) return;
             const assistantMsg: Message = {
                 ...response,
                 role: 'assistant',
@@ -109,6 +438,7 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
             };
             setMessages(prev => [...prev, assistantMsg]);
         } catch (err) {
+            if (currentSessionId !== sessionId) return;
             console.error(err);
             setMessages(prev => [...prev, {
                 role: 'assistant',
@@ -118,9 +448,10 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
                 error: "Connection Error"
             }]);
         } finally {
-            setLoading(false);
+            if (currentSessionId === sessionId) setLoading(false);
         }
     };
+
 
     const copyToClipboard = (text: string, id: string) => {
         navigator.clipboard.writeText(text);
@@ -315,26 +646,7 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
                                     )}
 
                                     {/* Insight Action Row */}
-                                    <div className="mt-[32px] flex flex-wrap items-center justify-between border-t border-[var(--border-subtle)] pt-[24px]">
-                                        <div className="flex items-center gap-[12px]">
-                                            <button className="h-[36px] px-[16px] font-[500] rounded-[8px] border border-[var(--border-subtle)] text-[13px] text-[var(--text-secondary)] hover:bg-app-custom hover:text-[var(--text-primary)] transition-all flex items-center gap-[8px] hover:translate-y-[-1px] shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                                                <Save size={14} /> Save
-                                            </button>
-                                            <button className="h-[36px] px-[16px] font-[500] rounded-[8px] border border-[var(--border-subtle)] text-[13px] text-[var(--text-secondary)] hover:bg-app-custom hover:text-[var(--text-primary)] transition-all flex items-center gap-[8px] hover:translate-y-[-1px] shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                                                <Download size={14} /> Result as PDF
-                                            </button>
-                                            <button className="h-[36px] px-[16px] font-[500] rounded-[8px] border border-[var(--border-subtle)] text-[13px] text-[var(--text-secondary)] hover:bg-app-custom hover:text-[var(--text-primary)] transition-all flex items-center gap-[8px] hover:translate-y-[-1px] shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                                                <LayoutDashboard size={14} /> Pin to Dash
-                                            </button>
-                                            <button className="h-[36px] px-[16px] font-[500] rounded-[8px] border border-[var(--border-subtle)] text-[13px] text-[var(--text-secondary)] hover:bg-app-custom hover:text-[var(--text-primary)] transition-all flex items-center gap-[8px] hover:translate-y-[-1px] shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-                                                <Share size={14} /> Link
-                                            </button>
-                                        </div>
-                                        <div className="flex items-center gap-[4px] text-[var(--text-muted)]">
-                                            <button className="p-2 hover:bg-app-custom rounded-[6px] transition-colors" title="Accurate Response"><ThumbsUp size={16} /></button>
-                                            <button className="p-2 hover:bg-app-custom rounded-[6px] transition-colors" title="Incorrect Context"><ThumbsDown size={16} /></button>
-                                        </div>
-                                    </div>
+                                    <MessageActionRow msg={msg} question={messages.slice(0, messages.indexOf(msg)).reverse().find(m => m.role === 'user')?.answer} />
                                 </div>
                             )}
                         </div>
@@ -515,6 +827,7 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
                 </div>
             </div>
 
+            <Toaster position="bottom-right" toastOptions={{ duration: 2500 }} />
         </div>
     );
 };

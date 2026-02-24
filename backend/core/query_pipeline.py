@@ -4,11 +4,18 @@ import logging
 import datetime
 from dotenv import load_dotenv
 from openai import OpenAI
-from backend.core.database import db
-from backend.core.prompt_builder import prompt_builder
-from backend.core.session_manager import session_manager
-from backend.core.sql_validator import validator
-from backend.core.stats_engine import stats_engine
+try:
+    from backend.core.database import db
+    from backend.core.prompt_builder import prompt_builder
+    from backend.core.session_manager import session_manager
+    from backend.core.sql_validator import validator
+    from backend.core.stats_engine import stats_engine
+except ImportError:
+    from core.database import db
+    from core.prompt_builder import prompt_builder
+    from core.session_manager import session_manager
+    from core.sql_validator import validator
+    from core.stats_engine import stats_engine
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
