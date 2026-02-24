@@ -28,6 +28,7 @@ class QueryPipeline:
         self.primary_model = os.getenv("MODEL_PRIMARY", "gpt-4")
         self.fallback_model = os.getenv("MODEL_FALLBACK", "gpt-3.5-turbo")
         self.max_retries = 1
+        self.openai_timeout_s = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "15"))
         
     def process(self, user_question: str, session_id: str) -> dict:
         start_time = datetime.datetime.now()
@@ -36,6 +37,13 @@ class QueryPipeline:
         # But first check if session has history
         session_ctx = session_manager.get_context_for_prompt(session_id)
         turn_count = session_ctx.get("turn_count", 0)
+
+        # Non-data queries (greetings / definitions / meta) must not enter SQL generation.
+        non_data = self._handle_non_data_query(user_question)
+        if non_data is not None:
+            execution_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
+            non_data["execution_time_ms"] = execution_time
+            return non_data
         
         # Check for compound questions (Multi-Step Decomp)
         # Verify it's not the first turn (as per user instruction)
@@ -221,6 +229,96 @@ class QueryPipeline:
                 "sql_used": None
             }
 
+    def _handle_non_data_query(self, user_question: str) -> dict | None:
+        q = (user_question or "").strip()
+        if not q:
+            return None
+
+        ql = q.lower()
+
+        # Greetings / small talk
+        greeting_starts = ("hi", "hello", "hey", "thanks", "thank you")
+        if ql in {"hi", "hello", "hey", "thanks", "thank you"} or any(
+            ql.startswith(s + " ") or ql == s for s in greeting_starts
+        ):
+            return {
+                "answer": "Hi. Ask a question about the UPI transactions dataset (for example: failure rate by bank, top states by volume, or fraud-flag rate by device type).",
+                "sql_used": None,
+                "chart": None,
+                "proactive_insight": None,
+                "is_clarification": False,
+                "query_intent": "non_data_query",
+            }
+
+        # Meta/system capability questions
+        meta_markers = (
+            "what can you do",
+            "what do you do",
+            "how do you work",
+            "what data do you have",
+            "what data is available",
+            "what dataset",
+            "help",
+            "how to use",
+            "how can i use",
+            "what can i ask",
+        )
+        if any(marker in ql for marker in meta_markers):
+            return {
+                "answer": (
+                    "I answer analytics questions over a UPI transactions dataset using SQL on the `transactions` table. "
+                    "You can ask about volume, amounts, failure rate, success rate, fraud-flag rate, and breakdowns by state, bank, device, network, age group, day, or hour."
+                ),
+                "sql_used": None,
+                "chart": None,
+                "proactive_insight": None,
+                "is_clarification": False,
+                "query_intent": "non_data_query",
+            }
+
+        # Knowledge/definition questions (handle only when clearly conceptual, not analytical)
+        knowledge_prefixes = ("what is ", "define ", "explain ")
+        analytical_markers = (
+            "show ",
+            "list ",
+            "compare",
+            "versus",
+            " vs ",
+            "trend",
+            "over time",
+            "by ",
+            "per ",
+            "between",
+            "top ",
+            "highest",
+            "lowest",
+            "average",
+            "avg",
+            "total",
+            "count",
+            "how many",
+            "rate",
+            "percentage",
+            "percent",
+            "volume",
+            "breakdown",
+            "distribution",
+        )
+        if ql.startswith(knowledge_prefixes) and not any(m in ql for m in analytical_markers):
+            return {
+                "answer": (
+                    "This looks like a conceptual question. I can explain terms at a high level, or you can ask for a metric computed from the dataset. "
+                    "If you want a data-backed answer, specify the metric and a breakdown (for example: failure rate by bank, or fraud-flag rate by device type)."
+                ),
+                "sql_used": None,
+                "chart": None,
+                "proactive_insight": None,
+                "is_clarification": False,
+                "query_intent": "non_data_query",
+            }
+
+        return None
+
     def _is_compound_question(self, question: str) -> bool:
         """
         Detects if a question requires multi-step reasoning.
@@ -320,21 +418,38 @@ Dataset benchmarks for comparison:
 
     def _call_gpt4(self, messages: list, temperature: float, expect_json: bool) -> str:
         try:
-            response = self.client.chat.completions.create(
-                model=self.primary_model,
-                messages=messages,
-                temperature=temperature
-            )
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.primary_model,
+                    messages=messages,
+                    temperature=temperature,
+                    timeout=self.openai_timeout_s
+                )
+            except TypeError:
+                # Backward-compatible: some SDK versions don't accept per-call timeout.
+                response = self.client.chat.completions.create(
+                    model=self.primary_model,
+                    messages=messages,
+                    temperature=temperature
+                )
             logger.info(f"Successfully called primary model: {self.primary_model}")
             return response.choices[0].message.content
         except Exception as e:
             logger.warning(f"Primary model {self.primary_model} failed: {e}. Trying fallback {self.fallback_model}.")
             try:
-                response = self.client.chat.completions.create(
-                    model=self.fallback_model,
-                    messages=messages,
-                    temperature=temperature
-                )
+                try:
+                    response = self.client.chat.completions.create(
+                        model=self.fallback_model,
+                        messages=messages,
+                        temperature=temperature,
+                        timeout=self.openai_timeout_s
+                    )
+                except TypeError:
+                    response = self.client.chat.completions.create(
+                        model=self.fallback_model,
+                        messages=messages,
+                        temperature=temperature
+                    )
                 logger.info(f"Successfully called fallback model: {self.fallback_model}")
                 return response.choices[0].message.content
             except Exception as e2:

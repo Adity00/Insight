@@ -377,43 +377,6 @@ def _dry_run_sql(self, sql: str) -> dict:
 
 ---
 
-## 6. SQL Validator Hardening
-
-### 6.1 Add Semantic Validation Rules
-
-**File**: `sql_validator.py`
-
-**Current**: Only checks for forbidden keywords and basic structure.
-
-**Add these validations**:
-
-```python
-# 1. Verify all referenced columns exist in schema
-VALID_COLUMNS = {
-    'transaction_id', 'timestamp', 'transaction_type', 'merchant_category',
-    'amount_inr', 'transaction_status', 'sender_age_group', 'receiver_age_group',
-    'sender_state', 'sender_bank', 'receiver_bank', 'device_type',
-    'network_type', 'fraud_flag', 'hour_of_day', 'day_of_week', 'is_weekend'
-}
-
-# 2. Validate string literals match known enum values
-# 3. Ensure GROUP BY matches SELECT for aggregation queries
-# 4. Warn if WHERE clause references merchant_category without NULL check
-# 5. Warn if P2P analysis doesn't filter receiver_age_group IS NOT NULL
-# 6. Validate LIMIT exists and is reasonable (1-500)
-# 7. Check for potential division by zero in CASE expressions
-```
-
-### 6.2 Add SQL Complexity Scoring
-
-**Change**: Score SQL complexity to detect overly simple or overly complex queries relative to the user's question:
-
-- Question has 3+ entities but SQL has 0 WHERE clauses → flag as potentially wrong
-- Question is simple but SQL has 5+ JOINs → flag as over-engineered
-- Score mismatch triggers a re-generation request
-
----
-
 ## 7. Narration & BI Layer Accuracy
 
 ### 7.1 Pass SQL to Narration Prompt
@@ -538,99 +501,6 @@ DECOMPOSITION RULES:
 
 ---
 
-## 9. Slash Command & Intent Classification
-
-### 9.1 Add Backend Slash Command Handlers
-
-**Problem**: Slash commands (`/compare`, `/trend`, `/fraud`, `/forecast`, `/demographics`) just insert text — there's no specialized backend handling.
-
-**Change**: In `query_pipeline.py`, add a slash command router:
-
-```python
-SLASH_COMMAND_HANDLERS = {
-    "/compare": {"template": "comparison", "required_entities": ["dimension", "values"]},
-    "/trend": {"template": "time_series", "time_column": "timestamp or hour_of_day"},
-    "/fraud": {"template": "fraud_analysis", "default_filter": "fraud_flag = 1"},
-    "/forecast": {"template": "time_series", "extrapolate": True},
-    "/demographics": {"template": "demographic_breakdown", "group_by": "sender_age_group"}
-}
-```
-
-Each handler should:
-- Pre-fill the SQL template with known parameters
-- Add specialized prompt context for that command type
-- Set appropriate chart type defaults
-
-### 9.2 Add Smart Suggestions Based on Data Profile
-
-**Change**: After each response, calculate what follow-up questions would be most valuable based on the current data profile and conversation history. Return these as `suggested_next_questions` in the API response.
-
----
-
-## 10. Model Configuration & API Call Optimization
-
-### 10.1 Use `response_format` for JSON Enforcement
-
-**File**: `query_pipeline.py` → `_call_gpt4()`
-
-**Problem**: The system relies on string cleaning (`replace("```json", "")`) to handle GPT output formatting. This is fragile.
-
-**Change**: Use OpenAI's native JSON mode:
-
-```python
-def _call_gpt4(self, messages, temperature, expect_json):
-    params = {
-        "model": self.primary_model,
-        "messages": messages,
-        "temperature": temperature
-    }
-    if expect_json:
-        params["response_format"] = {"type": "json_object"}
-    
-    response = self.client.chat.completions.create(**params)
-```
-
-### 10.2 Optimize Model Selection
-
-**Current**: All queries use GPT-4 (expensive, slower), falling back to GPT-3.5-turbo.
-
-**Change**: Implement smart model routing:
-
-```python
-MODEL_ROUTING = {
-    "simple_aggregation": "gpt-3.5-turbo",     # "Total transactions"
-    "complex_analysis": "gpt-4",                # Multi-filter, multi-step
-    "comparison": "gpt-4",                      # Cross-entity comparisons
-    "follow_up": "gpt-3.5-turbo",              # Context-resolved follow-ups
-    "narration": "gpt-3.5-turbo",              # Narration doesn't need GPT-4
-    "decomposition": "gpt-4",                  # Decomposition needs reasoning
-    "intent_classification": "gpt-3.5-turbo",  # Fast classification
-}
-```
-
-### 10.3 Add Token Budget Management
-
-**Change**: Track token usage per session and per query:
-
-```python
-MAX_TOKENS_PER_QUERY = 4000
-MAX_TOKENS_PER_SESSION = 50000
-
-# Truncate conversation history if approaching token limits
-# Summarize older turns instead of including raw text
-```
-
-### 10.4 Add Caching for Repeated Queries
-
-**Change**: Implement a simple query cache:
-
-```python
-# Cache key = normalized question + relevant entity context
-# Cache TTL = session lifetime
-# Only cache DATA_QUERY results (not follow-ups that depend on context)
-```
-
----
 
 ## 11. Data Layer & Schema Improvements
 
@@ -789,12 +659,6 @@ Common fixes:
 Return the corrected JSON object."""
 ```
 
-### 13.3 Add Circuit Breaker for API Calls
-
-**Change**: If 3 consecutive GPT calls fail, enter a "degraded mode" that uses:
-- Cached responses for similar questions
-- Template-based SQL generation
-- A user-facing message about temporary service issues
 
 ### 13.4 Add Timeout Handling
 
@@ -813,72 +677,6 @@ response = self.client.chat.completions.create(
 
 ---
 
-## 14. Testing & Validation Strategy
-
-### 14.1 Create Comprehensive Test Suite
-
-Create `backend/tests/test_accuracy.py` with these test categories:
-
-**Category 1: Simple Queries (20 tests)**
-```python
-SIMPLE_TESTS = [
-    {"q": "Total number of transactions", "expect_col": "count", "expect_rows": 1},
-    {"q": "Average transaction amount", "expect_col": "avg", "expect_rows": 1},
-    {"q": "How many failed transactions?", "expect_col": "count", "expect_status_filter": "FAILED"},
-    {"q": "List all transaction types", "expect_col": "transaction_type", "expect_rows": 4},
-    # ... 16 more
-]
-```
-
-**Category 2: Complex Queries (15 tests)**
-```python
-COMPLEX_TESTS = [
-    {"q": "Which bank has the highest failure rate and what percentage is it?",
-     "expect_cols": ["sender_bank", "failure_rate"], "expect_order": "DESC"},
-    {"q": "Compare fraud flag rates between weekdays and weekends",
-     "expect_filter": "is_weekend", "expect_cols": ["is_weekend", "fraud_flag_rate"]},
-    # ... 13 more
-]
-```
-
-**Category 3: Context/Follow-Up (10 tests)**
-```python
-CONTEXT_TESTS = [
-    {"q1": "Which state has the most transactions?",
-     "q2": "What is the success rate there?",
-     "expect_q2_filter": "sender_state IN"},
-    # ... 9 more
-]
-```
-
-**Category 4: Edge Cases (10 tests)**
-```python
-EDGE_CASES = [
-    {"q": "What is UPI?", "expect": "non_data_query"},
-    {"q": "", "expect": "error"},
-    {"q": "Show me everything", "expect": "clarification"},
-    {"q": "What about those?", "expect": "clarification"},  # No context
-    # ... 6 more
-]
-```
-
-### 14.2 Add Regression Testing Pipeline
-
-**Change**: Create a script that runs all tests and reports:
-- Pass/fail rate per category
-- Average confidence score  
-- Average response time
-- SQL accuracy (does the SQL query the right columns/filters?)
-- Context accuracy (do follow-ups correctly resolve references?)
-
-### 14.3 Add A/B Testing Framework
-
-**Change**: For prompt changes, run both old and new prompts and compare:
-- SQL correctness rate
-- User-facing answer quality (manual review)
-- Token usage efficiency
-
----
 
 ## 15. Priority Implementation Roadmap
 
@@ -903,25 +701,6 @@ EDGE_CASES = [
 | 12 | Add confidence scoring | `query_pipeline.py` | 1 hour |
 | 13 | Pass SQL to narration prompt | `prompt_builder.py` | 10 min |
 | 14 | Add SQL template patterns | `prompt_builder.py` | 45 min |
-
-### Phase 3: Advanced Features (Impact: MEDIUM, Effort: HIGH)
-| # | Change | File | Est. Effort |
-|---|--------|------|-------------|
-| 15 | Add entity decay/relevance scoring | `session_manager.py` | 1.5 hours |
-| 16 | Add conversation summarization | `session_manager.py` | 1 hour |
-| 17 | Smart model routing | `query_pipeline.py` | 45 min |
-| 18 | Add caching layer | `query_pipeline.py` | 1 hour |
-| 19 | Frontend feedback loop | `ChatWindow.tsx` + new endpoint | 2 hours |
-| 20 | Comprehensive test suite | `tests/` | 3 hours |
-
-### Phase 4: Production Hardening (Impact: MEDIUM, Effort: MEDIUM)
-| # | Change | File | Est. Effort |
-|---|--------|------|-------------|
-| 21 | Graceful degradation chain | `query_pipeline.py` | 1.5 hours |
-| 22 | Circuit breaker for API calls | `query_pipeline.py` | 1 hour |
-| 23 | Timeout handling | `query_pipeline.py` | 15 min |
-| 24 | Add computed views | `database.py` | 30 min |
-| 25 | Display real metrics in frontend | `ChatWindow.tsx` | 30 min |
 
 ---
 
