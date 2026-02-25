@@ -17,15 +17,20 @@ app = FastAPI(
 allowed_origins = [
     "http://localhost:3000",
     "https://localhost:3000",
+    "http://localhost:3001",
+    "https://localhost:3001",
 ]
 
 frontend_url = os.getenv("FRONTEND_URL", "")
 if frontend_url:
     allowed_origins.append(frontend_url)
 
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"https://insightx.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]

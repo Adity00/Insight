@@ -8,6 +8,11 @@ primary_region = "sin"
   PORT = "8080"
   CSV_PATH = "/app/data/upi_transactions_2024.csv"
   DB_PATH = "/app/data/insightx.db"
+  MODEL_PRIMARY = "gpt-4"
+  MODEL_FALLBACK = "gpt-3.5-turbo"
+  MAX_ROWS_RETURNED = "500"
+  SESSION_MEMORY_TURNS = "4"
+  FRONTEND_URL = "https://insightx-frontend.vercel.app"
 
 [http_service]
   internal_port = 8080
@@ -15,6 +20,11 @@ primary_region = "sin"
   auto_stop_machines = false
   auto_start_machines = true
   min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 250
+    soft_limit = 200
 
 [[mounts]]
   source = "insightx_data"
@@ -29,3 +39,8 @@ primary_region = "sin"
     port = 8080
     timeout = "10s"
     type = "http"
+
+[[vm]]
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1
