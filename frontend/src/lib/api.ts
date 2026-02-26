@@ -1,5 +1,44 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+// ── Auth-aware fetch wrapper ──────────────────────────────
+
+async function authFetch(url: string, opts: RequestInit = {}): Promise<Response> {
+  const headers: Record<string, string> = {
+    'Accept': 'application/json',
+  };
+
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem("insightx_token");
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+
+  // Merge with any existing headers from opts
+  const existingHeaders = opts.headers as Record<string, string> | undefined;
+  if (existingHeaders) {
+    Object.assign(headers, existingHeaders);
+  }
+
+  const res = await fetch(url, { ...opts, headers });
+
+  // Handle unauthorized (401) globally
+  if (res.status === 401 && typeof window !== 'undefined') {
+    console.warn("Session expired or unauthorized. Logging out...");
+    localStorage.removeItem("insightx_token");
+    localStorage.removeItem("insightx_authenticated");
+
+    // Only redirect if we're not already on the login page
+    if (!window.location.pathname.startsWith('/login') && window.location.pathname !== '/') {
+      window.location.href = '/login?expired=true';
+    }
+  }
+
+  return res;
+}
+
+// ── Interfaces ────────────────────────────────────────────
+
 export interface DashboardStats {
   total_transactions: number;
   success_rate: number;
@@ -43,31 +82,33 @@ export interface TurnRecord {
   timestamp: string;
 }
 
+// ── API Client ────────────────────────────────────────────
+
 export const api = {
   async getDashboard(): Promise<DashboardStats> {
-    const res = await fetch(`${BASE_URL}/api/dashboard`);
+    const res = await authFetch(`${BASE_URL}/api/dashboard`);
     if (!res.ok) throw new Error('Dashboard fetch failed');
     return res.json();
   },
 
   async createSession(): Promise<{ session_id: string; created_at: string }> {
-    const res = await fetch(`${BASE_URL}/api/sessions`, { method: 'POST' });
+    const res = await authFetch(`${BASE_URL}/api/sessions`, { method: 'POST' });
     if (!res.ok) throw new Error('Session creation failed');
     return res.json();
   },
 
   async getSessions(): Promise<Session[]> {
-    const res = await fetch(`${BASE_URL}/api/sessions`);
+    const res = await authFetch(`${BASE_URL}/api/sessions`);
     if (!res.ok) return [];
     return res.json();
   },
 
   async deleteSession(sessionId: string): Promise<void> {
-    await fetch(`${BASE_URL}/api/sessions/${sessionId}`, { method: 'DELETE' });
+    await authFetch(`${BASE_URL}/api/sessions/${sessionId}`, { method: 'DELETE' });
   },
 
   async renameSession(sessionId: string, newTitle: string): Promise<void> {
-    const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}`, {
+    const res = await authFetch(`${BASE_URL}/api/sessions/${sessionId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title: newTitle }),
@@ -76,7 +117,7 @@ export const api = {
   },
 
   async askQuestion(question: string, sessionId: string): Promise<ChatMessage> {
-    const res = await fetch(`${BASE_URL}/api/chat`, {
+    const res = await authFetch(`${BASE_URL}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, session_id: sessionId })
@@ -86,7 +127,7 @@ export const api = {
   },
 
   async getSessionMessages(sessionId: string): Promise<TurnRecord[]> {
-    const res = await fetch(`${BASE_URL}/api/sessions/${sessionId}/messages`);
+    const res = await authFetch(`${BASE_URL}/api/sessions/${sessionId}/messages`);
     if (!res.ok) throw new Error('Failed to fetch messages');
     const data = await res.json();
     return data.messages || [];

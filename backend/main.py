@@ -3,9 +3,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 try:
-    from backend.routers import chat, sessions, dashboard
+    from backend.routers import chat, sessions, dashboard, auth
 except ImportError:
-    from routers import chat, sessions, dashboard
+    from routers import chat, sessions, dashboard, auth
 
 app = FastAPI(
     title="InsightX API",
@@ -39,6 +39,7 @@ app.add_middleware(
 app.include_router(chat.router, prefix="/api", tags=["Chat"])
 app.include_router(sessions.router, prefix="/api", tags=["Sessions"])
 app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
+app.include_router(auth.router, prefix="/api", tags=["Auth"])
 
 @app.get("/health")
 async def health_check():

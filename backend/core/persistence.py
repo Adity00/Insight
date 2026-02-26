@@ -28,7 +28,6 @@ class PersistenceManager:
 
     def __init__(self):
         self.db_path = DB_PATH
-        # Ensure the directory exists
         os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
         self._init_db()
 
@@ -48,7 +47,8 @@ class PersistenceManager:
                     created_at TEXT NOT NULL,
                     title TEXT NOT NULL DEFAULT 'New Chat',
                     turn_count INTEGER NOT NULL DEFAULT 0,
-                    last_active TEXT NOT NULL
+                    last_active TEXT NOT NULL,
+                    user_id INTEGER NOT NULL DEFAULT 0
                 );
 
                 CREATE TABLE IF NOT EXISTS turns (
@@ -64,8 +64,19 @@ class PersistenceManager:
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_turns_session ON turns(session_id);
+                CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
             """)
             conn.commit()
+
+            # Migration: add user_id column for existing databases
+            try:
+                conn.execute("SELECT user_id FROM sessions LIMIT 1")
+            except sqlite3.OperationalError:
+                conn.execute("ALTER TABLE sessions ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id)")
+                conn.commit()
+                logger.info("Migration: added user_id column to sessions table")
+
             conn.close()
             logger.info(f"PersistenceManager initialized. DB at: {self.db_path}")
         except Exception as e:
@@ -73,13 +84,13 @@ class PersistenceManager:
 
     # ─── Session Operations ───────────────────────────────────────────
 
-    def create_session(self, session_id: str) -> bool:
+    def create_session(self, session_id: str, user_id: int = 0) -> bool:
         try:
             now = datetime.datetime.now().isoformat()
             conn = self._get_conn()
             conn.execute(
-                "INSERT OR IGNORE INTO sessions (session_id, created_at, title, turn_count, last_active) VALUES (?, ?, ?, ?, ?)",
-                (session_id, now, "New Chat", 0, now)
+                "INSERT OR IGNORE INTO sessions (session_id, created_at, title, turn_count, last_active, user_id) VALUES (?, ?, ?, ?, ?, ?)",
+                (session_id, now, "New Chat", 0, now, user_id)
             )
             conn.commit()
             conn.close()
@@ -88,12 +99,17 @@ class PersistenceManager:
             logger.error(f"Persistence create_session failed: {e}")
             return False
 
-    def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def get_session(self, session_id: str, user_id: Optional[int] = None) -> Optional[Dict[str, Any]]:
         try:
             conn = self._get_conn()
-            row = conn.execute(
-                "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
-            ).fetchone()
+            if user_id is not None:
+                row = conn.execute(
+                    "SELECT * FROM sessions WHERE session_id = ? AND user_id = ?", (session_id, user_id)
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
+                ).fetchone()
             conn.close()
             if row:
                 return dict(row)
@@ -102,23 +118,35 @@ class PersistenceManager:
             logger.error(f"Persistence get_session failed: {e}")
             return None
 
-    def get_all_sessions(self) -> List[Dict[str, Any]]:
+    def get_all_sessions(self, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
         try:
             conn = self._get_conn()
-            rows = conn.execute(
-                "SELECT * FROM sessions ORDER BY last_active DESC"
-            ).fetchall()
+            if user_id is not None:
+                rows = conn.execute(
+                    "SELECT * FROM sessions WHERE user_id = ? ORDER BY last_active DESC", (user_id,)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM sessions ORDER BY last_active DESC"
+                ).fetchall()
             conn.close()
             return [dict(r) for r in rows]
         except Exception as e:
             logger.error(f"Persistence get_all_sessions failed: {e}")
             return []
 
-    def delete_session(self, session_id: str) -> bool:
+    def delete_session(self, session_id: str, user_id: Optional[int] = None) -> bool:
         try:
             conn = self._get_conn()
             conn.execute("DELETE FROM turns WHERE session_id = ?", (session_id,))
-            result = conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+            if user_id is not None:
+                result = conn.execute(
+                    "DELETE FROM sessions WHERE session_id = ? AND user_id = ?", (session_id, user_id)
+                )
+            else:
+                result = conn.execute(
+                    "DELETE FROM sessions WHERE session_id = ?", (session_id,)
+                )
             conn.commit()
             deleted = result.rowcount > 0
             conn.close()
@@ -127,13 +155,19 @@ class PersistenceManager:
             logger.error(f"Persistence delete_session failed: {e}")
             return False
 
-    def rename_session(self, session_id: str, new_title: str) -> bool:
+    def rename_session(self, session_id: str, new_title: str, user_id: Optional[int] = None) -> bool:
         try:
             conn = self._get_conn()
-            result = conn.execute(
-                "UPDATE sessions SET title = ? WHERE session_id = ?",
-                (new_title, session_id)
-            )
+            if user_id is not None:
+                result = conn.execute(
+                    "UPDATE sessions SET title = ? WHERE session_id = ? AND user_id = ?",
+                    (new_title, session_id, user_id)
+                )
+            else:
+                result = conn.execute(
+                    "UPDATE sessions SET title = ? WHERE session_id = ?",
+                    (new_title, session_id)
+                )
             conn.commit()
             updated = result.rowcount > 0
             conn.close()
@@ -215,7 +249,6 @@ class PersistenceManager:
             result = []
             for row in rows:
                 turn = dict(row)
-                # Deserialize chart JSON
                 if turn.get("chart"):
                     try:
                         turn["chart"] = json.loads(turn["chart"])

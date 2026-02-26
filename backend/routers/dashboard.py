@@ -1,16 +1,18 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 try:
     from backend.models.schemas import DashboardResponse
     from backend.core.database import db
+    from backend.routers.auth import require_auth
 except ImportError:
     from models.schemas import DashboardResponse
     from core.database import db
+    from routers.auth import require_auth
 
 router = APIRouter()
 
 @router.get("/dashboard", response_model=DashboardResponse)
-def get_dashboard():
+def get_dashboard(user: dict = Depends(require_auth)):
     profile = db.get_data_profile()
     
     # Calculate top items from distributions

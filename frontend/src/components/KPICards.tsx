@@ -56,7 +56,15 @@ export const KPICards = ({ stats }: KPICardsProps) => {
 
             <CardRow items={[
                 { label: "Top Payment Method", value: stats.top_transaction_type.toUpperCase() },
-                { label: "Active Mobile Dist", value: `${(stats.device_distribution?.mobile || 0).toFixed(0)}%` },
+                {
+                    label: "Mobile Usage", value: (() => {
+                        const dist = stats.device_distribution || {};
+                        const total = Object.values(dist).reduce((a, b) => a + b, 0);
+                        const android = dist["Android"] || 0;
+                        const ios = dist["iOS"] || 0;
+                        return total > 0 ? `${(((android + ios) / total) * 100).toFixed(0)}%` : "N/A";
+                    })()
+                },
                 { label: "System Status", value: <span className="text-[var(--success-text)] flex items-center gap-[4px]"><div className="w-[6px] h-[6px] rounded-full bg-[var(--success-border)] animate-pulse"></div> Healthy</span> }
             ]} />
         </div>
