@@ -112,8 +112,8 @@ class SessionManager:
                 "turn_count": 0
             }
             
-        # Get last 4 turns, extracted fields only
-        raw_turns = session["turns"][-4:]
+        # Get last 8 turns, extracted fields only
+        raw_turns = session["turns"][-8:]
         recent_turns = []
         for t in raw_turns:
             recent_turns.append({
