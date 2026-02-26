@@ -201,6 +201,30 @@ Expected JSON:
 }}
 CRITICAL: NEVER run separate COUNT queries to compare two entities. ALWAYS use a single SELECT with GROUP BY and WHERE column IN ('A', 'B'). Separate queries produce wrong percentages because they use different denominators.
 
+Example I — Simple location/show query (must never fail JSON parsing):
+Question: "Show me transactions from Maharashtra"
+Expected JSON:
+{{
+  "sql": "SELECT COUNT(*) AS total_transactions, ROUND(AVG(amount_inr), 2) AS avg_amount, ROUND(SUM(CASE WHEN transaction_status = 'FAILED' THEN 1.0 ELSE 0 END) * 100.0 / COUNT(*), 2) AS failure_rate FROM transactions WHERE sender_state = 'Maharashtra'",
+  "query_intent": "Summary statistics for Maharashtra — count, average amount, failure rate in single query",
+  "entities_extracted": {{"transaction_types": [], "states": ["Maharashtra"], "age_groups": [], "time_filters": {{}}, "metric": "volume"}},
+  "requires_chart": false,
+  "suggested_chart_type": "none"
+}}
+Apply this same pattern for ANY "show me [entity]" or "list [entity]" or "give me [entity]" query — always respond with a single summary SELECT with COUNT, AVG amount, and failure rate. Never decompose. Never return null SQL.
+
+Example J — Bank comparison with correct failure RATE (not raw count):
+Question: "Which bank has the most failed transactions? What percentage is that? Compare with HDFC"
+Expected JSON:
+{{
+  "sql": "SELECT sender_bank, COUNT(*) AS total_transactions, SUM(CASE WHEN transaction_status = 'FAILED' THEN 1 ELSE 0 END) AS failed_transactions, ROUND(SUM(CASE WHEN transaction_status = 'FAILED' THEN 1.0 ELSE 0 END) * 100.0 / COUNT(*), 2) AS failure_rate_pct FROM transactions WHERE sender_bank IN ('SBI', 'HDFC') GROUP BY sender_bank ORDER BY failed_transactions DESC",
+  "query_intent": "Compare SBI and HDFC — failed count AND failure rate percentage in single GROUP BY query",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "failure_rate"}},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
+CRITICAL DENOMINATOR RULE: When computing a failure rate or fraud rate for a specific bank, state, or entity — the denominator MUST be COUNT(*) of that entity's own rows only, computed inside a GROUP BY or WHERE clause. NEVER divide by the total table row count. NEVER run separate COUNT queries for numerator and denominator. Always use a single SELECT with GROUP BY and compute both count and rate in the same query.
+
 RESPONSE FORMAT — Critical:
 Respond with ONLY a valid JSON object. No explanation, no markdown, no code blocks.
 Format:
