@@ -41,21 +41,23 @@ Your job is to convert natural language questions into precise DuckDB SQL querie
 {enum_block}
 
 CRITICAL SQL RULES — follow these exactly:
-1. Only write SELECT statements. Never write INSERT, UPDATE, DELETE, DROP, or any mutating SQL.
-2. Always use the aliased column names (amount_inr, transaction_type, etc.) — never the raw CSV names.
-3. When calculating failure rate: SUM(CASE WHEN transaction_status = 'FAILED' THEN 1.0 ELSE 0 END) / COUNT(*) * 100
-4. When querying merchant-specific data, always add: WHERE merchant_category IS NOT NULL
-5. When querying P2P receiver age, always add: WHERE receiver_age_group IS NOT NULL
-6. For percentage calculations, always multiply by 100.0 (not 100) to avoid integer division.
-7. Always include ORDER BY for ranking/top-N queries.
-8. Limit results to 20 rows maximum unless the user asks for all data.
-9. Round decimal results to 2 decimal places using ROUND(value, 2).
-10. fraud_flag = 1 means flagged for review, NOT confirmed fraud.
-11. NEVER refuse a query or claim data is unavailable if the relevant column exists in the schema above. Columns device_type, network_type, sender_bank, sender_state, sender_age_group, transaction_type, merchant_category all exist and are always queryable.
-12. If a query asks to "compare" any two or more groups — always use GROUP BY on the grouping column and compute the metric for each group. A comparison query ALWAYS produces multiple rows, one per group.
-13. When computing fraud flag rate for a FILTERED subset (e.g., high-value transactions), always use: SUM(fraud_flag) * 100.0 / COUNT(*) where COUNT(*) is the count of rows IN THAT FILTERED SUBSET, not the total table. Never divide by a hardcoded number or a subquery count of the full table.
-14. When asked for top N states/banks/categories by volume or count, use ORDER BY count DESC LIMIT N. Never use HAVING or WHERE to filter by count unless the user explicitly asks for a threshold. The LIMIT clause alone is sufficient.
-15. In compound or follow-up queries about a specific entity (state, bank, category), ALL metrics including fraud_flag rate must be computed within a WHERE clause filtering to that entity. Never compute a rate using the full table denominator when the question is about a specific subset.
+1. RULE 1 — MUTUAL EXCLUSION (P2P): If the query involves transaction_type = 'P2P' or a filter set that includes only P2P, then merchant_category MUST NOT appear anywhere in the SQL — not in SELECT, WHERE, GROUP BY, or HAVING. P2P transactions have NULL merchant_category by schema definition. Querying merchant_category for P2P is semantically meaningless and will always return NULL. If the user explicitly asks for a merchant breakdown of P2P transactions, return "query_intent": "invalid_combination" and "sql": null in your JSON response.
+2. RULE 2 — MUTUAL EXCLUSION (Non-P2P): If the query involves any transaction_type that is NOT P2P (P2M, Bill Payment, Recharge), then receiver_age_group MUST NOT appear in the SQL. receiver_age_group is NULL for all non-P2P transactions by schema definition.
+3. Only write SELECT statements. Never write INSERT, UPDATE, DELETE, DROP, or any mutating SQL.
+4. Always use the aliased column names (amount_inr, transaction_type, etc.) — never the raw CSV names.
+5. When calculating failure rate: SUM(CASE WHEN transaction_status = 'FAILED' THEN 1.0 ELSE 0 END) / COUNT(*) * 100
+6. When querying merchant-specific data, always add: WHERE merchant_category IS NOT NULL
+7. When querying P2P receiver age, always add: WHERE receiver_age_group IS NOT NULL
+8. For percentage calculations, always multiply by 100.0 (not 100) to avoid integer division.
+9. Always include ORDER BY for ranking/top-N queries.
+10. Limit results to 20 rows maximum unless the user asks for all data.
+11. Round decimal results to 2 decimal places using ROUND(value, 2).
+12. fraud_flag = 1 means flagged for review, NOT confirmed fraud.
+13. NEVER refuse a query or claim data is unavailable if the relevant column exists in the schema above. Columns device_type, network_type, sender_bank, sender_state, sender_age_group, transaction_type, merchant_category all exist and are always queryable.
+14. If a query asks to "compare" any two or more groups — always use GROUP BY on the grouping column and compute the metric for each group. A comparison query ALWAYS produces multiple rows, one per group.
+15. When computing fraud flag rate for a FILTERED subset (e.g., high-value transactions), always use: SUM(fraud_flag) * 100.0 / COUNT(*) where COUNT(*) is the count of rows IN THAT FILTERED SUBSET, not the total table. Never divide by a hardcoded number or a subquery count of the full table.
+16. When asked for top N states/banks/categories by volume or count, use ORDER BY count DESC LIMIT N. Never use HAVING or WHERE to filter by count unless the user explicitly asks for a threshold. The LIMIT clause alone is sufficient.
+17. In compound or follow-up queries about a specific entity (state, bank, category), ALL metrics including fraud_flag rate must be computed within a WHERE clause filtering to that entity. Never compute a rate using the full table denominator when the question is about a specific subset.
 
 FEW-SHOT EXAMPLES (follow this style exactly):
 Example 1 — Percentage calculation (failure rate per bank)
@@ -130,6 +132,13 @@ IMPORTANT: In entities_extracted, always populate the relevant lists with the ac
 
         messages = [{"role": "system", "content": system_content}]
 
+        # DOWNSTREAM HANDLER REQUIRED:
+        # If sql_response["sql"] is None and query_intent == "invalid_combination",
+        # query_pipeline.py must short-circuit and return a user-friendly message
+        # like: "P2P transactions don't have merchant categories in our schema.
+        # Try asking about P2P volume, amounts, or age groups instead."
+        # See query_pipeline.py process() method — add null-SQL check after JSON parse.
+
         # Inject conversation history
         # Filter to keep only last 4 turns and ensure format
         recent_history = conversation_history[-4:] if conversation_history else []
@@ -185,10 +194,11 @@ Always refer to monetary amounts in Indian Rupees using the ₹ symbol. Never us
 
 BUSINESS INTELLIGENCE REQUIREMENTS — apply to every response:
 
-1. BENCHMARKING: After stating a metric, always compare it to the overall dataset average.
-   Example: "SBI's failure rate is 8.2%, which is 2.1 percentage points above the overall
-   average of 6.1% across all banks."
-   Never state a number in isolation — always give it context.
+1. BENCHMARKING: First identify the metric type from the column names and values, then apply the correct benchmark:
+   - If the result contains AVERAGES or MEANS (column names contain avg, mean, average, per_transaction): compare against the dataset-wide average amount injected as avg_amount_inr from the data profile.
+   - If the result contains RATES or PERCENTAGES (column names contain rate, pct, percent, ratio, or numeric values are between 0 and 100): compare against the relevant dataset-wide rate — success_rate or fraud_flag_rate from the data profile.
+   - If the result contains SUMS, TOTALS, or COUNTS (column names contain total, sum, volume, count, transactions): do NOT compare to the mean amount. Express the result as a percentage of the total dataset or as a share of total transaction value.
+   - If the result is a RANKING or TOP-N list: no benchmark comparison is needed. Describe the order, the gap between top and bottom, and what the ranking implies for business decisions.
 
 2. ANOMALY FLAGGING: If any value in the data is more than 20% above or below the
    dataset average for that metric, flag it explicitly.
@@ -208,6 +218,8 @@ BUSINESS INTELLIGENCE REQUIREMENTS — apply to every response:
 
 6. MAGNITUDE AWARENESS: Always describe numbers in human terms alongside raw figures.
    Example: "37,427 transactions — roughly 15% of all transactions in the dataset."
+
+NEVER compare a SUM or COUNT to the dataset mean transaction amount. This is mathematically invalid. Volume metrics must be expressed as proportions of total, not compared to averages.
 
 CRITICAL: You are narrating ONLY from the data provided to you. Never invent
 benchmarks or averages that aren't in the data. If you cannot compute a comparison
