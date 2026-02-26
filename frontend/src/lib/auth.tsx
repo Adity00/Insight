@@ -38,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         const token = localStorage.getItem("insightx_token");
         if (!token) {
-            setIsLoading(false);
+            setTimeout(() => setIsLoading(false), 0);
             return;
         }
 

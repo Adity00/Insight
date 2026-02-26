@@ -4,9 +4,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
     Send, Sparkles, Loader2, Lightbulb, ChevronRight,
     Mic, Paperclip, ChevronDown, Copy, Edit2, Save, Download,
-    Check, ArrowRight, BarChart2, TrendingUp, PieChart, Focus,
+    Check, BarChart2, TrendingUp, PieChart, Focus,
     Share, LayoutDashboard, ThumbsUp, ThumbsDown, Database,
-    Clock, Code2, Server, TerminalSquare
+    Clock, Code2, Server, TerminalSquare, CheckCircle
 } from 'lucide-react';
 import { api, ChatMessage, TurnRecord } from '@/lib/api';
 import { Visualizations } from '@/components/Visualizations';
@@ -46,12 +46,12 @@ const MessageActionRow = ({ msg, question }: { msg: Message; question?: string }
         setSaving(true);
         try {
             const saved = JSON.parse(localStorage.getItem('saved_insights') || '[]');
-            if (!saved.find((s: any) => s.id === msg.id)) {
+            if (!saved.find((s: { id: string }) => s.id === msg.id)) {
                 saved.push(msg);
                 localStorage.setItem('saved_insights', JSON.stringify(saved));
             }
             toast.success('Insight Saved Successfully');
-        } catch (error) {
+        } catch {
             toast.error('Something went wrong. Please try again.');
         } finally {
             setTimeout(() => setSaving(false), 2000); // disable for 2s
@@ -161,7 +161,7 @@ const MessageActionRow = ({ msg, question }: { msg: Message; question?: string }
                         if (parts[1]) doc.text(parts[1], currentX + doc.getTextWidth(parts[0] + ': '), yPos);
                     } else {
                         const tokens = line.split(/(\*\*)/g);
-                        for (let t of tokens) {
+                        for (const t of tokens) {
                             if (t === '**') {
                                 isBoldState = !isBoldState;
                             } else if (t.length > 0) {
@@ -205,7 +205,7 @@ const MessageActionRow = ({ msg, question }: { msg: Message; question?: string }
             }
 
             // 5. Add Footers on all pages
-            const pageCount = (doc.internal as any).getNumberOfPages();
+            const pageCount = (doc.internal as unknown as { getNumberOfPages: () => number }).getNumberOfPages();
             const datePrinted = new Date().toLocaleDateString();
 
             for (let i = 1; i <= pageCount; i++) {
@@ -249,13 +249,13 @@ const MessageActionRow = ({ msg, question }: { msg: Message; question?: string }
         setPinning(true);
         try {
             const pinnedList = JSON.parse(localStorage.getItem('pinned_insights') || '[]');
-            if (!pinnedList.find((s: any) => s.id === msg.id)) {
+            if (!pinnedList.find((s: { id: string }) => s.id === msg.id)) {
                 pinnedList.push(msg);
                 localStorage.setItem('pinned_insights', JSON.stringify(pinnedList));
             }
             setPinned(true);
             toast.success('Pinned to Dashboard');
-        } catch (error) {
+        } catch {
             toast.error('Something went wrong. Please try again.');
         } finally {
             setPinning(false);
@@ -268,7 +268,7 @@ const MessageActionRow = ({ msg, question }: { msg: Message; question?: string }
             url.searchParams.set('insight', msg.id);
             await navigator.clipboard.writeText(url.toString());
             toast.success('Link Copied to Clipboard');
-        } catch (error) {
+        } catch {
             toast.error('Something went wrong. Please try again.');
         }
     };
@@ -285,7 +285,7 @@ const MessageActionRow = ({ msg, question }: { msg: Message; question?: string }
             }).catch(() => { }); // Catch separately so UI updates regardless of backend presence
 
             setFeedback(newFeedback);
-        } catch (error) {
+        } catch {
             toast.error('Something went wrong. Please try again.');
         } finally {
             setFeedbackLoading(false);
@@ -320,7 +320,9 @@ const MessageActionRow = ({ msg, question }: { msg: Message; question?: string }
     );
 };
 
-export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any }) => {
+import { DashboardStats } from '@/lib/api';
+
+export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: DashboardStats | null }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -333,7 +335,7 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
     const [contextPanelMsg, setContextPanelMsg] = useState<Message | null>(null);
     const [showSlashCmds, setShowSlashCmds] = useState(false);
 
-    const [historyLoading, setHistoryLoading] = useState(false);
+
 
 
     useEffect(() => {
@@ -342,7 +344,7 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
         let cancelled = false;
 
         setMessages([]);
-        setHistoryLoading(true);
+
 
         api.getSessionMessages(sessionId)
             .then((turns: TurnRecord[]) => {
@@ -364,9 +366,6 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
             })
             .catch(() => {
                 if (!cancelled) setMessages([]);
-            })
-            .finally(() => {
-                if (!cancelled) setHistoryLoading(false);
             });
 
         return () => { cancelled = true; };
@@ -553,7 +552,7 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
                                 <div className="w-[4px] h-[4px] rounded-full bg-[var(--border-medium)]"></div>
                                 <span>{stats.top_state} is Most Active</span>
                                 <div className="w-[4px] h-[4px] rounded-full bg-[var(--border-medium)]"></div>
-                                <span className="text-[var(--success-text)] flex items-center gap-[4px]"><CheckCircleIcon /> Data is Fresh</span>
+                                <span className="text-[var(--success-text)] flex items-center gap-[4px]"><CheckCircle /> Data is Fresh</span>
                             </div>
                         )}
                     </div>
@@ -790,7 +789,7 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
                                         <span className="text-[13px] font-[600] text-[var(--text-primary)]">GPT-4 (OpenAI)</span>
                                     </div>
                                     <div className="flex items-center justify-between">
-                                        <span className="text-[13px] font-[500] text-[var(--text-secondary)] flex items-center gap-[8px]"><CheckCircleIcon /> Accuracy Confidence</span>
+                                        <span className="text-[13px] font-[500] text-[var(--text-secondary)] flex items-center gap-[8px]"><CheckCircle size={14} /> Accuracy Confidence</span>
                                         <span className="text-[13px] font-[600] text-[var(--success-border)]">
                                             SQL Validated ✓
                                         </span>
@@ -832,9 +831,3 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
     );
 };
 
-const CheckCircleIcon = () => (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-        <polyline points="22 4 12 14.01 9 11.01"></polyline>
-    </svg>
-)

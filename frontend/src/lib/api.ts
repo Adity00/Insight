@@ -55,7 +55,7 @@ export interface DashboardStats {
 export interface ChatMessage {
   answer: string;
   sql_used?: string;
-  chart?: { type: string; data: any[]; x_key: string; y_key: string } | null;
+  chart?: { type: string; data: Record<string, unknown>[]; x_key: string; y_key: string } | null;
   proactive_insight?: string;
   query_intent?: string;
   execution_time_ms?: number;
@@ -78,7 +78,7 @@ export interface TurnRecord {
   content: string;
   sql_used?: string;
   execution_time_ms?: number;
-  chart?: any;
+  chart?: { type: string; data: Record<string, unknown>[]; x_key: string; y_key: string } | null;
   timestamp: string;
 }
 

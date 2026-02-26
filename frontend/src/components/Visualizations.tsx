@@ -6,7 +6,7 @@ import {
     LineChart, Line, PieChart, Pie, Cell, Legend, AreaChart, Area
 } from 'recharts';
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { value: number | string }[]; label?: string }) => {
     if (active && payload && payload.length) {
         return (
             <div className="bg-[var(--bg-surface)] border border-[var(--border-subtle)] p-[16px] rounded-[12px] shadow-[var(--shadow-md)] z-50">
@@ -20,7 +20,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     return null;
 };
 
-export const Visualizations = ({ chartData }: { chartData: any }) => {
+export const Visualizations = ({ chartData }: { chartData: { type: string; data: Record<string, unknown>[]; x_key: string; y_key: string } }) => {
     if (!chartData || !chartData.data) return null;
 
     const { type, data, x_key, y_key } = chartData;
@@ -69,7 +69,7 @@ export const Visualizations = ({ chartData }: { chartData: any }) => {
                                 nameKey={x_key}
                                 stroke="none"
                             >
-                                {data.map((_: any, index: number) => (
+                                {data.map((_: unknown, index: number) => (
                                     <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                                 ))}
                             </Pie>

@@ -7,6 +7,22 @@ interface KPICardsProps {
     stats: DashboardStats | null;
 }
 
+const CardRow = ({ items }: { items: { label: string, value: string | React.ReactNode }[] }) => (
+    <div className="max-w-[720px] h-[72px] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[12px] shadow-[var(--shadow-sm)] flex items-center px-[24px] py-[16px] transition-all duration-200 hover:shadow-[var(--shadow-md)]">
+        {items.map((item, index) => (
+            <React.Fragment key={index}>
+                <div className="flex-1 flex flex-col justify-center">
+                    <span className="text-[12px] font-[500] uppercase text-[var(--text-muted)] tracking-[0.08em] mb-[4px]">{item.label}</span>
+                    <span className="text-[20px] font-[600] text-[var(--text-primary)] leading-none">{item.value}</span>
+                </div>
+                {index < items.length - 1 && (
+                    <div className="w-[1px] h-[40px] bg-[var(--border-subtle)] mx-[24px]"></div>
+                )}
+            </React.Fragment>
+        ))}
+    </div>
+);
+
 export const KPICards = ({ stats }: KPICardsProps) => {
     if (!stats) return (
         <div className="animate-pulse flex flex-col gap-[24px] max-w-[720px]">
@@ -24,21 +40,7 @@ export const KPICards = ({ stats }: KPICardsProps) => {
         return new Intl.NumberFormat('en-US', { notation: "compact", compactDisplay: "short" }).format(Number(val));
     };
 
-    const CardRow = ({ items }: { items: { label: string, value: string | React.ReactNode }[] }) => (
-        <div className="max-w-[720px] h-[72px] bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[12px] shadow-[var(--shadow-sm)] flex items-center px-[24px] py-[16px] transition-all duration-200 hover:shadow-[var(--shadow-md)]">
-            {items.map((item, index) => (
-                <React.Fragment key={index}>
-                    <div className="flex-1 flex flex-col justify-center">
-                        <span className="text-[12px] font-[500] uppercase text-[var(--text-muted)] tracking-[0.08em] mb-[4px]">{item.label}</span>
-                        <span className="text-[20px] font-[600] text-[var(--text-primary)] leading-none">{item.value}</span>
-                    </div>
-                    {index < items.length - 1 && (
-                        <div className="w-[1px] h-[40px] bg-[var(--border-subtle)] mx-[24px]"></div>
-                    )}
-                </React.Fragment>
-            ))}
-        </div>
-    );
+
 
     return (
         <div className="flex flex-col gap-[24px] animate-fade-in w-full pb-[40px]">

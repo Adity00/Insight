@@ -7,8 +7,8 @@ import { ChatWindow } from '@/components/ChatWindow';
 import { KPICards } from '@/components/KPICards';
 import { useAuth } from '@/lib/auth';
 import {
-  Sparkles, MessageSquare, Search, Plus, Menu, Moon, Sun,
-  LayoutDashboard, Settings, MoreVertical, Briefcase, ChevronDown,
+  MessageSquare, Search, Plus, Menu, Moon, Sun,
+  LayoutDashboard, MoreVertical, Briefcase, ChevronDown,
   Edit2, Trash2, Check, X, LogOut
 } from 'lucide-react';
 
