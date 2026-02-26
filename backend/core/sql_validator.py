@@ -34,15 +34,19 @@ class SQLValidator:
             return {"valid": False, "cleaned_sql": None, "reason": "Query must query the 'transactions' table/view."}
 
         # 6. Forbidden strings check
-        # List of forbidden keywords/patterns
         forbidden = [
-            "DROP ", "DELETE ", "INSERT ", "UPDATE ", "ALTER ", 
-            "EXEC ", "EXECUTE ", "XP_", "--"
+            "DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "TRUNCATE", 
+            "CREATE", "REPLACE", "MERGE", "EXEC", "EXECUTE", "GRANT", 
+            "REVOKE", "ATTACH", "DETACH", "PRAGMA"
         ]
         
-        for term in forbidden:
-            if term in sql_upper:
-                return {"valid": False, "cleaned_sql": None, "reason": f"Query contains forbidden keyword: {term.strip()}"}
+        # Whitespace normalization defeats tab/newline injection obfuscation
+        normalized_sql = re.sub(r'\s+', ' ', sql).strip()
+        
+        for keyword in forbidden:
+            pattern = re.compile(r'\b' + keyword + r'\b', re.IGNORECASE | re.MULTILINE)
+            if pattern.search(normalized_sql):
+                return {"valid": False, "cleaned_sql": None, "reason": f"Forbidden SQL keyword detected: {keyword}"}
 
         # If all checks pass
         return {"valid": True, "cleaned_sql": cleaned_sql, "reason": None}

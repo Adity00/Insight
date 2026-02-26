@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import datetime
+import re
 from dotenv import load_dotenv
 from openai import OpenAI
 try:
@@ -60,7 +61,10 @@ class QueryPipeline:
         if self._is_compound_question(user_question) and not turn_count == 0:
             sub_questions = self._decompose_question(user_question)
             if len(sub_questions) > 1:
-                return self._process_compound(sub_questions, session_id, user_question)
+                try:
+                    return self._process_compound(sub_questions, session_id, user_question)
+                except Exception as compound_err:
+                    logger.error(f"Compound processing failed, falling through to simple query: {compound_err}", exc_info=True)
 
         # Just use list [] for ambiguity check history
         history_for_check = session_ctx.get("recent_turns", [])
@@ -81,10 +85,14 @@ class QueryPipeline:
         
         try:
             # Step 3 — GPT-4 Pass 1 (SQL Generation)
+            context_to_inject = session_ctx["entity_tracker"] if self._should_inject_context(
+                user_question, session_ctx["entity_tracker"], session_ctx["turn_count"]
+            ) else {}
+            
             sql_messages = prompt_builder.build_sql_generation_prompt(
                 user_question, 
                 session_ctx["recent_turns"], 
-                session_ctx["entity_tracker"]
+                context_to_inject
             )
             
             gpt_response_str = self._call_gpt4(sql_messages, temperature=0, expect_json=True)
@@ -92,8 +100,14 @@ class QueryPipeline:
             try:
                 # Clean up potential markdown formatting before parsing
                 clean_json_str = gpt_response_str.replace("```json", "").replace("```", "").strip()
-                sql_response = json.loads(clean_json_str)
-            except json.JSONDecodeError:
+                # Strip BOM characters and stray leading/trailing whitespace
+                clean_json_str = clean_json_str.strip('\ufeff').strip()
+                try:
+                    sql_response = json.loads(clean_json_str)
+                except json.JSONDecodeError:
+                    # Fallback: skip any leading non-JSON line (e.g. stray explanation text)
+                    sql_response = json.loads(clean_json_str.split('\n', 1)[-1])
+            except (json.JSONDecodeError, Exception):
                 logger.error(f"Failed to parse JSON from GPT: {gpt_response_str}")
                 return {
                     "answer": "I understood your question, but I encountered an internal error generating the query structure. Please try again.",
@@ -160,6 +174,30 @@ class QueryPipeline:
                         "is_clarification": False
                     }
 
+            # Step 5b — Empty result short-circuit (prevents narrator hallucination)
+            if db_result.get("data") == [] and db_result.get("error") is None:
+                execution_time = (datetime.datetime.now() - start_time).total_seconds() * 1000
+                session_manager.add_turn(session_id, {
+                    "turn_number": turn_count + 1,
+                    "user_question": user_question,
+                    "sql_used": cleaned_sql,
+                    "data_result": db_result,
+                    "answer": "No transactions found matching your query. The filters may be too specific — try broadening your search.",
+                    "proactive_insight": None,
+                    "entities": entities_extracted,
+                    "query_intent": query_intent,
+                    "timestamp": datetime.datetime.now().isoformat()
+                })
+                return {
+                    "answer": "No transactions found matching your query. The filters may be too specific — try broadening your search.",
+                    "sql_used": cleaned_sql,
+                    "chart": None,
+                    "proactive_insight": None,
+                    "query_intent": query_intent,
+                    "execution_time_ms": execution_time,
+                    "is_clarification": False
+                }
+
             # Statistical enrichment — pure computation, no API calls
             statistical_enrichment = {}
             try:
@@ -221,13 +259,66 @@ class QueryPipeline:
             }
 
         except Exception as e:
-            logger.error(f"Pipeline Error: {e}")
+            logger.error(f"Pipeline Error: {e}", exc_info=True)
+            err_str = str(e).lower()
+            if "json" in err_str:
+                user_msg = "I had trouble parsing the query structure. Could you rephrase your question?"
+            elif "column" in err_str or "binder" in err_str:
+                user_msg = "I couldn't map your question to the data columns. Try being more specific — for example, mention 'sender_bank' or 'transaction_type' explicitly."
+            elif "timeout" in err_str:
+                user_msg = "The query took too long. Try a more specific question with filters."
+            else:
+                user_msg = "An unexpected error occurred while processing your request. If this persists, try rephrasing your question differently."
             return {
-                "answer": "An unexpected error occurred while processing your request.",
+                "answer": user_msg,
                 "error": str(e),
                 "is_clarification": False,
                 "sql_used": None
             }
+
+    def _should_inject_context(self, user_question: str, entity_tracker: dict, turn_count: int) -> bool:
+        if turn_count == 0:
+            logger.debug("Context Injection: False (turn_count=0)")
+            return False
+            
+        is_empty = True
+        for key, val in entity_tracker.items():
+            if isinstance(val, list) and len(val) > 0:
+                is_empty = False
+                break
+            elif isinstance(val, dict) and len(val) > 0:
+                is_empty = False
+                break
+            elif isinstance(val, str) and val:
+                is_empty = False
+                break
+            elif val is not None and not isinstance(val, (list, dict, str)):
+                is_empty = False
+                break
+                
+        if is_empty:
+            logger.debug("Context Injection: False (tracker is empty)")
+            return False
+
+        pronouns = ["those", "them", "that", "these", "same", "there", "similar", "it", "its", "their", "the same"]
+        ql = user_question.lower()
+        for p in pronouns:
+            if re.search(r'\b' + p + r'\b', ql):
+                logger.debug(f"Context Injection: True (found pronoun '{p}')")
+                return True
+                
+        for key, val in entity_tracker.items():
+            if isinstance(val, list):
+                for item in val:
+                    if str(item).lower() in ql:
+                        logger.debug(f"Context Injection: True (re-mentioned '{item}' from tracker)")
+                        return True
+            elif isinstance(val, str) and val and val.lower() in ql:
+                logger.debug(f"Context Injection: True (re-mentioned '{val}' from tracker)")
+                return True
+
+        logger.debug("Context Injection: False (general question, no stale context injected)")
+        return False
 
     def _handle_non_data_query(self, user_question: str) -> dict | None:
         q = (user_question or "").strip()
@@ -323,9 +414,22 @@ class QueryPipeline:
         """
         Detects if a question requires multi-step reasoning.
         """
+        # Guard 1: Short questions are never compound.
+        # <= 7 words covers "Show me transactions from Maharashtra" (6 words).
+        if len(question.split()) <= 7:
+            return False
+
+        # Guard 2: Simple lookup intent (show/list/get/find/display) with no conjunctions
+        # prevents single-entity location queries from being flagged as compound.
         q_lower = question.lower()
+        simple_verbs = ("show", "list", "get", "find", "display")
+        compound_conjunctions = (" and ", "also", "additionally", " then ", "as well")
+        if any(q_lower.startswith(v) or f" {v} " in q_lower for v in simple_verbs):
+            if not any(c in q_lower for c in compound_conjunctions):
+                return False
+
         patterns = [
-            " and " in q_lower and ("what" in q_lower or "how" in q_lower or "which" in q_lower), # Heuristic for connecting two questions
+            " and " in q_lower and ("what" in q_lower or "how" in q_lower or "which" in q_lower),
             "also" in q_lower,
             "additionally" in q_lower,
             "as well as" in q_lower,

@@ -82,9 +82,18 @@ class SessionManager:
         
         if new_entities:
             for key, val in new_entities.items():
-                # Only update if val is truthy (not empty list/dict/None/string)
-                if val: 
+                if isinstance(val, list):
+                    # Empty list is an intentional signal from LLM to clear stale context
                     tracker[key] = val
+                elif isinstance(val, dict):
+                    if not val:
+                        tracker[key] = {}
+                    else:
+                        tracker[key].update(val)
+                else:
+                    # Scalar values: overwrite only if explicitly present and not empty string
+                    if val is not None and val != "":
+                        tracker[key] = val
         
         # 5. Update summary every 5 turns
         if len(session["turns"]) % 5 == 0:
@@ -103,8 +112,8 @@ class SessionManager:
                 "turn_count": 0
             }
             
-        # Get last 4 turns, extracted fields only
-        raw_turns = session["turns"][-4:]
+        # Get last 8 turns, extracted fields only
+        raw_turns = session["turns"][-8:]
         recent_turns = []
         for t in raw_turns:
             recent_turns.append({

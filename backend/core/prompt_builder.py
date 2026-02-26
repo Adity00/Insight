@@ -110,6 +110,97 @@ Expected JSON:
   "suggested_chart_type": "bar"
 }}
 
+Example A — General comparison query (NO transaction_type filter when question is general):
+Question: "Compare failure rates between Android and iOS users"
+Expected JSON:
+{{
+  "sql": "SELECT device_type, ROUND(SUM(CASE WHEN transaction_status = 'FAILED' THEN 1.0 ELSE 0 END) * 100.0 / COUNT(*), 2) AS failure_rate FROM transactions WHERE device_type IN ('Android', 'iOS') GROUP BY device_type ORDER BY failure_rate DESC",
+  "query_intent": "Compare failure rate between Android and iOS — no transaction_type filter since question is general",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "failure_rate"}},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
+
+Example B — General bank query (NO transaction_type filter):
+Question: "Which bank has the highest failure rate?"
+Expected JSON:
+{{
+  "sql": "SELECT sender_bank, ROUND(SUM(CASE WHEN transaction_status = 'FAILED' THEN 1.0 ELSE 0 END) * 100.0 / COUNT(*), 2) AS failure_rate FROM transactions GROUP BY sender_bank ORDER BY failure_rate DESC LIMIT 20",
+  "query_intent": "Rank all banks by failure rate — no filter applied since question is about all banks",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "failure_rate"}},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
+
+Example C — All transaction types volume (no filter — show all 4 types):
+Question: "What is the total transaction volume for each transaction type?"
+Expected JSON:
+{{
+  "sql": "SELECT transaction_type, COUNT(*) AS transaction_count, ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 1) AS pct_of_total FROM transactions GROUP BY transaction_type ORDER BY transaction_count DESC",
+  "query_intent": "Transaction volume and percentage share by type — all types, no filter",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "volume"}},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
+
+Example D — State fraud rate with national average in single query:
+Question: "Which state has the highest fraud flag rate and how does it compare to the national average?"
+Expected JSON:
+{{
+  "sql": "SELECT sender_state, ROUND(SUM(fraud_flag) * 100.0 / COUNT(*), 4) AS fraud_flag_rate, ROUND((SELECT SUM(fraud_flag) * 100.0 / COUNT(*) FROM transactions), 4) AS national_avg FROM transactions GROUP BY sender_state ORDER BY fraud_flag_rate DESC LIMIT 15",
+  "query_intent": "State fraud flag rates ranked with national average for comparison",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "fraud_flag_rate"}},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
+
+Example E — Multi-turn follow-up: what percentage does that represent (after a bank question):
+Context: {{"states": [], "transaction_types": [], "metric": "failed_transactions", "last_category": "SBI"}}
+Question: "What percentage of their total transactions does that represent?"
+Expected JSON:
+{{
+  "sql": "SELECT ROUND(SUM(CASE WHEN transaction_status = 'FAILED' THEN 1.0 ELSE 0 END) * 100.0 / COUNT(*), 2) AS failure_rate FROM transactions WHERE sender_bank = 'SBI'",
+  "query_intent": "SBI failure rate as percentage of their total — resolved from context",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "failure_rate"}},
+  "requires_chart": false,
+  "suggested_chart_type": "none"
+}}
+
+Example F — High value transaction fraud rate (filtered subset — denominator is subset not full table):
+Question: "What percentage of high value transactions above 10000 rupees are flagged for review?"
+Expected JSON:
+{{
+  "sql": "SELECT ROUND(SUM(fraud_flag) * 100.0 / COUNT(*), 4) AS fraud_flag_rate, COUNT(*) AS total_high_value FROM transactions WHERE amount_inr > 10000",
+  "query_intent": "Fraud flag rate for high-value transactions only — denominator is filtered subset",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{"amount_min": 10000}}, "metric": "fraud_flag_rate"}},
+  "requires_chart": false,
+  "suggested_chart_type": "none"
+}}
+
+Example G — Peak hours time series for a specific metric:
+Question: "What are the peak hours for fraud flagged transactions?"
+Expected JSON:
+{{
+  "sql": "SELECT hour_of_day, COUNT(*) AS flagged_count FROM transactions WHERE fraud_flag = 1 GROUP BY hour_of_day ORDER BY hour_of_day ASC",
+  "query_intent": "Count of fraud-flagged transactions by hour — ordered chronologically for time series",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "fraud_flag_count"}},
+  "requires_chart": true,
+  "suggested_chart_type": "line"
+}}
+Critical notes for Example G: ORDER BY hour_of_day ASC not flagged_count DESC — time series charts must be chronological. The chart type is line not bar for time-based data.
+
+Example H — Never decompose a simple comparison into multiple queries:
+Question: "Compare failure rates between SBI and HDFC"
+Expected JSON:
+{{
+  "sql": "SELECT sender_bank, COUNT(*) AS total_transactions, SUM(CASE WHEN transaction_status = 'FAILED' THEN 1 ELSE 0 END) AS failed_transactions, ROUND(SUM(CASE WHEN transaction_status = 'FAILED' THEN 1.0 ELSE 0 END) * 100.0 / COUNT(*), 2) AS failure_rate FROM transactions WHERE sender_bank IN ('SBI', 'HDFC') GROUP BY sender_bank ORDER BY failure_rate DESC",
+  "query_intent": "Compare SBI vs HDFC failure rate — single GROUP BY query, never decompose into separate counts",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "failure_rate"}},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
+CRITICAL: NEVER run separate COUNT queries to compare two entities. ALWAYS use a single SELECT with GROUP BY and WHERE column IN ('A', 'B'). Separate queries produce wrong percentages because they use different denominators.
+
 RESPONSE FORMAT — Critical:
 Respond with ONLY a valid JSON object. No explanation, no markdown, no code blocks.
 Format:
@@ -129,6 +220,13 @@ Format:
 IMPORTANT: In entities_extracted, always populate the relevant lists with the actual values you used in your SQL WHERE clauses. If you filtered by sender_state IN ('Maharashtra'), then states must be ['Maharashtra']. This is mandatory."""
 
         messages = [{"role": "system", "content": system_content}]
+
+        # DOWNSTREAM HANDLER REQUIRED:
+        # If sql_response["sql"] is None and query_intent == "invalid_combination",
+        # query_pipeline.py must short-circuit and return a user-friendly message
+        # like: "P2P transactions don't have merchant categories in our schema.
+        # Try asking about P2P volume, amounts, or age groups instead."
+        # See query_pipeline.py process() method — add null-SQL check after JSON parse.
 
         # Inject conversation history
         # Filter to keep only last 4 turns and ensure format
@@ -185,10 +283,11 @@ Always refer to monetary amounts in Indian Rupees using the ₹ symbol. Never us
 
 BUSINESS INTELLIGENCE REQUIREMENTS — apply to every response:
 
-1. BENCHMARKING: After stating a metric, always compare it to the overall dataset average.
-   Example: "SBI's failure rate is 8.2%, which is 2.1 percentage points above the overall
-   average of 6.1% across all banks."
-   Never state a number in isolation — always give it context.
+1. BENCHMARKING: First identify the metric type from the column names and values, then apply the correct benchmark:
+   - If the result contains AVERAGES or MEANS (column names contain avg, mean, average, per_transaction): compare against the dataset-wide average amount injected as avg_amount_inr from the data profile.
+   - If the result contains RATES or PERCENTAGES (column names contain rate, pct, percent, ratio, or numeric values are between 0 and 100): compare against the relevant dataset-wide rate — success_rate or fraud_flag_rate from the data profile.
+   - If the result contains SUMS, TOTALS, or COUNTS (column names contain total, sum, volume, count, transactions): do NOT compare to the mean amount. Express the result as a percentage of the total dataset or as a share of total transaction value.
+   - If the result is a RANKING or TOP-N list: no benchmark comparison is needed. Describe the order, the gap between top and bottom, and what the ranking implies for business decisions.
 
 2. ANOMALY FLAGGING: If any value in the data is more than 20% above or below the
    dataset average for that metric, flag it explicitly.
@@ -208,6 +307,8 @@ BUSINESS INTELLIGENCE REQUIREMENTS — apply to every response:
 
 6. MAGNITUDE AWARENESS: Always describe numbers in human terms alongside raw figures.
    Example: "37,427 transactions — roughly 15% of all transactions in the dataset."
+
+NEVER compare a SUM or COUNT to the dataset mean transaction amount. This is mathematically invalid. Volume metrics must be expressed as proportions of total, not compared to averages.
 
 CRITICAL: You are narrating ONLY from the data provided to you. Never invent
 benchmarks or averages that aren't in the data. If you cannot compute a comparison
