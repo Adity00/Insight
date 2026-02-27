@@ -1,180 +1,387 @@
-# InsightX: Conversational UPI Analytics Platform
+<div align="center">
 
-InsightX is an intelligent analytics platform that allows users to query UPI transaction data using natural language. Built with a modern tech stack (Next.js, FastAPI, DuckDB, OpenAI), it converts English questions into optimized SQL queries, executes them against a high-performance in-memory database, and presents insights with interactive visualizations.
+# 🔍 InsightX
 
-![InsightX Screenshot](https://via.placeholder.com/800x450?text=InsightX+Dashboard)
+### Conversational AI Analytics for UPI Payments
 
-## 🚀 Key Features
+[![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-green?logo=fastapi)](https://fastapi.tiangolo.com)
+[![Next.js](https://img.shields.io/badge/Next.js-16.1-black?logo=nextdotjs)](https://nextjs.org)
+[![DuckDB](https://img.shields.io/badge/DuckDB-0.10-yellow)](https://duckdb.org)
+[![GPT-4](https://img.shields.io/badge/OpenAI-GPT--4-412991?logo=openai)](https://openai.com)
 
-### 🌟 Premium Frontend Dashboard (V4)
-- **Unified Workspace Experience**: Deep-purple accented dark theme and glassmorphism styling, featuring a collapsible side-navigation pane and seamless view switching between Chat and KPI Dashboard modes.
-- **Interactive Chat Interface**: A sticky, floating prompt input with intelligent placeholder cycling and instant slash-command suggestions (`/compare`, `/trend`, `/forecast`).
-- **Stack Execution Trace Drawer**: A right-sided slide-out drawer providing full transparency. Inspect the exact generated SQL query, view the verified origin data sources, and monitor execution metrics (latency, compute tier, confidence scores) for every query.
-- **Insight Action Rows**: Save, download as PDF, share via link, or pin generated charts directly to your Custom Dashboard.
-- **Proactive Insights System**: Data discoveries are presented cleanly with collapsible cards ("Did you know?" style insights) that don't crowd the conversation.
+_Ask business questions in plain English. Get data-backed answers instantly._
 
-### 🧠 Advanced Backend AI
-- **Natural Language to SQL**: Converts complex questions ("Show me fraud trends in Mumbai last week") into precise SQL queries.
-- **Multi-Step Reasoning**: Handles complex multi-part questions using recursive query decomposition.
-- **Business Intelligence**: Rich contextual analysis of data trends and automatic Executive Summaries for quick decision-making.
+**IIT Bombay Techfest 2025-26 — InsightX: Leadership Analytics Challenge**
 
-### 📊 Real-time Dashboard & KPI Tracking
-- **Interactive KPI Cards**: Real-time KPI cards mapping out total transaction volume, tracking success rates, and highlighting top demographic states.
-- **Rich Visualizations**: Auto-generated Recharts components (Area, Bar, Line, and Pie charts) featuring customized gradients that match the deep-purple branding.
+</div>
 
 ---
 
-## 🛠️ Architecture
+## ⚡ Quick Start — 3 Steps, Under 5 Minutes
 
-InsightX follows a clean, decoupled architecture:
+> ✅ **No API key setup required.** The environment is pre-configured. Just clone and run.
 
-1.  **Frontend (Next.js 14, Tailwind V4 UI)**:
-    - **Chat Interface & Dashboard**: Contains `ChatWindow`, `KPICards`, and a responsive Slide-over Context Panel.
-    - **Visualization**: `Recharts` for dynamic charting with custom data color palettes and gradient SVGs.
-    - **State Management**: React state hooks driving conditional rendering (Chat mode vs Dashboard mode, Sidebar toggles, Theme states).
-    - **Styling**: Modern UI design system strictly utilizing CSS Variables (`globals.css`) for a comprehensive light/dark mode implementation with rich aesthetics.
-
-2.  **Backend (FastAPI)**:
-    - **API Layer**: REST endpoints for chat (`/api/chat`), sessions (`/api/sessions`), and dashboard (`/api/dashboard`).
-    - **Orchestration**: `QueryPipeline` manages the flow from Prompt -> LLM -> SQL -> Execution -> Narrator.
-    - **Prompt Engineering**: Context-aware prompts with schema injection and few-shot examples.
-
-3.  **Data Layer (DuckDB)**:
-    - **In-Memory Performance**: Lightning-fast analytical queries on 250k+ rows.
-    - **Data Loading**: Auto-ingestion of CSV data into optimized views.
-
----
-
-## 📊 Dataset Schema
-
-The system is powered by a comprehensive synthetic dataset of **250,000 UPI transactions**.
-
-| Column Name          | Type    | Description                                                     |
-| :------------------- | :------ | :-------------------------------------------------------------- |
-| `transaction_id`     | STRING  | Unique identifier for the transaction                           |
-| `timestamp`          | DATE    | Date and time of the transaction                                |
-| `transaction_type`   | STRING  | `P2P`, `P2M`, `Bill Payment`, `Recharge`                        |
-| `merchant_category`  | STRING  | e.g., `Food`, `Grocery`, `Fuel`, `Entertainment` (NULL for P2P) |
-| `amount_inr`         | INTEGER | Transaction value in Indian Rupees (₹)                          |
-| `transaction_status` | STRING  | `SUCCESS`, `FAILED`                                             |
-| `sender_age_group`   | STRING  | `18-25`, `26-35`, `36-45`, etc.                                 |
-| `receiver_age_group` | STRING  | Age group of receiver (for P2P)                                 |
-| `sender_state`       | STRING  | Origin state (e.g., `Maharashtra`, `Delhi`)                     |
-| `sender_bank`        | STRING  | Bank name (e.g., `SBI`, `HDFC`)                                 |
-| `device_type`        | STRING  | `Android`, `iOS`, `Web`                                         |
-| `network_type`       | STRING  | `4G`, `5G`, `WiFi`                                              |
-| `fraud_flag`         | INTEGER | `1` (Flagged for review), `0` (Normal)                          |
-
-> **Note**: The raw dataset (`upi_transactions_2024.csv`) is **NOT** included in the repository due to size constraints. You must place it in `backend/data/`.
-
----
-
-## 📦 Installation & Setup
-
-### Prerequisites
-
-- **Python 3.10+**
-- **Node.js 18+**
-- **Git**
-- **OpenAI API Key**
-
-### 1. Clone the Repository
+### Step 1 — Clone
 
 ```bash
 git clone https://github.com/Adity00/Insight.git
-cd InsightX
+cd Insight
 ```
 
-### 2. Backend Setup
+### Step 2 — Start Backend
 
-Navigate to the project root (where `backend/` and `requirements.txt` are located).
+```bash
+# Create and activate virtual environment
+python -m venv venv
 
-1.  **Create Virtual Environment**:
+# Windows:
+venv\Scripts\activate
+# macOS / Linux:
+source venv/bin/activate
 
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows: venv\Scripts\activate
-    ```
+# Install dependencies
+pip install -r requirements.txt
 
-2.  **Install Dependencies**:
+# Start the server
+python -m uvicorn backend.main:app --reload --port 8000
+```
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+**You should see this output — do not proceed until you see it:**
 
-3.  **Environment Variables**:
-    Create a `.env` file in the root directory:
+```
+INFO:     Loaded 250000 rows from backend/data/upi_transactions_2024.csv
+INFO:     DuckDB initialized successfully
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+```
 
-    ```env
-    OPENAI_API_KEY=sk-your-openai-api-key-here
-    CSV_PATH=backend/data/upi_transactions_2024.csv
-    ```
+> 💡 First startup takes 10-15 seconds while DuckDB loads the dataset into memory.
+> All subsequent startups are faster as the database file is cached.
 
-4.  **Add Data**:
-    Place your `upi_transactions_2024.csv` file inside `backend/data/`.
+### Step 3 — Start Frontend
 
-5.  **Run Server**:
-    ```bash
-    python -m uvicorn backend.main:app --reload --port 8000
-    ```
-    The API will be available at `http://localhost:8000`.
+Open a **new terminal window** (keep backend running in the first one):
 
-### 3. Frontend Setup
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-Navigate to the frontend directory.
+**You should see:**
 
-1.  **Install Dependencies**:
+```
+▲ Next.js 16.1.6
+- Local:   http://localhost:3000
+- Ready in ~2s
+```
 
-    ```bash
-    cd frontend
-    npm install
-    # or
-    npm install --legacy-peer-deps  # if you encounter dependency conflicts
-    ```
+### ✅ Verify It's Working
 
-2.  **Run Development Server**:
+Open [http://localhost:3000](http://localhost:3000)
 
-    ```bash
-    npm run dev
-    ```
+The dashboard KPI cards must show exactly:
+| Metric | Expected Value |
+|--------|---------------|
+| Total Transactions | 250,000 |
+| Success Rate | 95.05% |
+| Flagged for Review | 0.19% |
+| Avg Transaction Amount | ₹1,311.76 |
 
-3.  **Open Application**:
-    Visit `http://localhost:3000` in your browser.
-
----
-
-## 🖥️ Usage Guide
-
-1.  **Dashboard View**: Upon loading, you'll see a live dashboard with high-level KPI metrics formatted dynamically.
-2.  **Ask a Question**: Open the Chat Interface to query your data.
-    - Try Slash Commands directly from the UI dropdown: type `/trend last 7 days failed transactions`.
-    - Alternatively type in plain English: _"Compare the average transaction amount between iOS and Android users."_
-3.  **Explore the Context Drawer**:
-    - Click **"View Stack"** on any generated answer.
-    - A right-hand panel slides open showing exact SQL syntax, origin schemas, latency, and LLM compute models.
-    - Easily copy the parsed SQL representation from here.
-4.  **Interact with Insights**:
-    - Hover over beautifully rendered gradient charts for full tooltips.
-    - Expand "Proactive Insights" banners to dive deeper into automatically identified anomalies.
+If you see these numbers — **setup is complete and working correctly.**
 
 ---
 
-## 🤝 Contributing
+## What is InsightX?
 
-Contributions are welcome! Please fork the repository and create a pull request.
+InsightX is a conversational analytics system that lets business leaders query 250,000 UPI payment transactions using natural language — no SQL, no dashboards, no data analyst required.
 
-1.  Fork the Project
-2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4.  Push to the Branch (`git push origin feature/AmazingFeature`)
-5.  Open a Pull Request
+Ask: _"Which state has the highest fraud flag rate compared to the national average?"_
+
+Get: A statistically enriched answer with z-scores, benchmarks, a ranked bar chart, and an actionable recommendation — in under 5 seconds.
 
 ---
 
-## 📄 License
+## System Architecture
 
-Distributed under the MIT License. See `LICENSE` for more information.
+```
+User Query (Natural Language)
+       │
+       ▼
+┌─────────────────────────────────────────────┐
+│              FastAPI Backend                │
+│                                             │
+│  Intent Classifier                          │
+│       │                                     │
+│       ├── GREETING → Direct response        │
+│       ├── KNOWLEDGE → Explanation           │
+│       └── DATA_QUERY ──────────────────┐   │
+│                                        │   │
+│  Session Manager (Entity Tracker)      │   │
+│  Remembers context across turns        │   │
+│                                        ▼   │
+│                          GPT-4 Pass 1       │
+│                          SQL Generation     │
+│                          temp=0, few-shot   │
+│                               │             │
+│                               ▼             │
+│                    DuckDB In-Memory         │
+│                    250k rows, <100ms        │
+│                               │             │
+│                               ▼             │
+│                   Statistical Enrichment    │
+│                   z-scores, benchmarks      │
+│                               │             │
+│                               ▼             │
+│                          GPT-4 Pass 2       │
+│                          Narration          │
+│                          temp=0.3           │
+└───────────────────────────────┼─────────────┘
+                                │
+                                ▼
+                   ┌────────────────────┐
+                   │   Next.js Frontend  │
+                   │  Chat + Charts +    │
+                   │  SQL View + KPIs    │
+                   └────────────────────┘
+```
+
+| Layer      | Technology                | Version | Purpose                            |
+| ---------- | ------------------------- | ------- | ---------------------------------- |
+| Frontend   | Next.js + Tailwind CSS v4 | 16.1.6  | Chat UI, charts, dashboard         |
+| Charts     | Recharts                  | 3.7     | Bar, line, and area visualizations |
+| API        | FastAPI + Pydantic        | 0.111   | REST endpoints, request validation |
+| AI         | OpenAI GPT-4              | —       | NL-to-SQL + insight narration      |
+| Database   | DuckDB (in-memory)        | 0.10.3  | Sub-100ms analytical queries       |
+| Session    | Custom entity tracker     | —       | Multi-turn context retention       |
+| Statistics | SciPy + custom engine     | —       | Z-scores, deviation, benchmarks    |
 
 ---
 
-**Built with ❤️ by the InsightX Team**
+## Supported Query Types
+
+InsightX handles all 6 query categories from the problem statement:
+
+| Category          | Example                                                     | Key Insight Returned                         |
+| ----------------- | ----------------------------------------------------------- | -------------------------------------------- |
+| **Descriptive**   | "What is the average transaction amount for P2P?"           | ₹1,308.68 with benchmark vs overall          |
+| **Comparative**   | "Compare failure rates between Android and iOS"             | Both ~4.9%, statistically equivalent         |
+| **Temporal**      | "What are the peak hours for flagged transactions?"         | Hour 19 (7PM) peaks, line chart              |
+| **Segmentation**  | "Which age group uses P2P most frequently?"                 | 26-35 leads with 87,432 transactions         |
+| **Correlation**   | "Is there a relationship between network type and success?" | WiFi 95.14%, 3G 94.78% — marginal difference |
+| **Risk Analysis** | "Which state has the highest fraud flag rate?"              | Karnataka 0.23% (z=1.53 above national avg)  |
+
+### Multi-Turn Conversation Example
+
+```
+You → "Which bank has the most failed transactions?"
+Bot → "SBI leads with 3,095 failed transactions across 62,693 total."
+
+You → "What percentage of their transactions is that?"
+Bot → "SBI's failure rate is 4.94% — slightly above the platform average of 4.96%."
+
+You → "Compare with HDFC"
+Bot → "HDFC has a 4.82% failure rate (1,808 failed / 37,485 total).
+        Both banks perform within normal range — no statistical anomaly detected."
+```
+
+Context is retained automatically across all turns. No need to repeat bank names or filters.
+
+---
+
+## UI Features
+
+- **View Stack** — Every response shows the exact SQL generated, query intent classification, and execution time. Full transparency.
+- **Proactive Insights** — Automatically surfaces patterns beyond your question (e.g., "You might also find it interesting that...")
+- **Actionable Recommendations** — Business-level advice derived from the data, not generic text
+- **Statistical Context** — Z-scores and benchmark comparisons on every numerical result
+- **Chart Types** — Bar charts for comparisons, line charts for time-series, auto-selected based on query type
+- **Save / Pin to Dash** — Pin important answers to the dashboard for reference
+- **Export as PDF** — Download any answer as a formatted PDF report
+
+---
+
+## Project Structure
+
+```
+insightx/
+├── backend/
+│   ├── core/
+│   │   ├── query_pipeline.py    # Main orchestration — intent → SQL → DB → narration
+│   │   ├── prompt_builder.py    # GPT-4 prompt engineering with 10 few-shot examples
+│   │   ├── database.py          # DuckDB connection, query execution, data profile
+│   │   ├── session_manager.py   # Multi-turn entity tracker, context injection
+│   │   ├── sql_validator.py     # SQL security — blocks DROP, DELETE, injection
+│   │   └── stats_engine.py      # Z-scores, deviation, percentile enrichment
+│   ├── data/
+│   │   ├── upi_transactions_2024.csv   # Official dataset (250,000 rows, 17 columns)
+│   │   └── insightx.db                 # Auto-generated on first startup (gitignored)
+│   └── main.py                  # FastAPI app, API routes, CORS config
+├── frontend/
+│   └── src/
+│       ├── components/
+│       │   ├── ChatWindow.tsx   # Main chat interface, message rendering
+│       │   ├── KPICards.tsx     # Dashboard metrics cards
+│       │   └── Charts.tsx       # Recharts visualizations
+│       └── app/                 # Next.js app router
+├── .env                         # Pre-configured environment (API key included)
+├── .env.example                 # Template for reference
+├── requirements.txt             # Python dependencies (pinned versions)
+└── README.md
+```
+
+---
+
+## Troubleshooting
+
+### Backend Issues
+
+**`ModuleNotFoundError` on startup**
+
+```bash
+# Virtual environment is not activated — run this first:
+# Windows:
+venv\Scripts\activate
+# macOS/Linux:
+source venv/bin/activate
+
+# Then reinstall:
+pip install -r requirements.txt
+```
+
+**`CSV not found` or `Loaded 0 rows` error**
+
+```bash
+# Verify the CSV exists:
+# Windows:
+dir backend\data\upi_transactions_2024.csv
+# macOS/Linux:
+ls backend/data/upi_transactions_2024.csv
+
+# If missing, re-clone the repository fresh
+git clone https://github.com/Adity00/Insight.git
+```
+
+**`OpenAI API error` or `AuthenticationError`**
+
+```bash
+# The .env file is pre-configured with a valid key.
+# If you see this error, the key may have expired.
+# Contact the team for a fresh key.
+# Verify .env exists in the ROOT directory (not inside backend/):
+# Windows:
+dir .env
+# macOS/Linux:
+ls -la .env
+```
+
+**Backend starts but returns 500 errors**
+
+```bash
+# Check the terminal where uvicorn is running for the full error message.
+# Most common cause: rate limit on OpenAI API.
+# Wait 60 seconds and retry the query.
+```
+
+**Port 8000 already in use**
+
+```bash
+# Kill whatever is using port 8000, then restart:
+# Windows:
+netstat -ano | findstr :8000
+taskkill /PID  /F
+# macOS/Linux:
+lsof -ti:8000 | xargs kill -9
+
+# Then restart:
+python -m uvicorn backend.main:app --reload --port 8000
+```
+
+### Frontend Issues
+
+**`npm install` fails with peer dependency conflicts**
+
+```bash
+npm install --legacy-peer-deps
+```
+
+**Frontend loads but shows no data / blank KPI cards**
+
+```bash
+# Backend is not running. Verify:
+curl http://localhost:8000/health
+# Expected response: {"status": "healthy", ...}
+
+# If curl fails, backend is not running — go back to Step 2.
+```
+
+**Port 3000 already in use**
+
+```bash
+# Run frontend on a different port:
+npm run dev -- -p 3001
+# Then open http://localhost:3001
+```
+
+**Charts not rendering / blank visualizations**
+
+```bash
+# Hard refresh the browser: Ctrl+Shift+R (Windows) / Cmd+Shift+R (Mac)
+# If still blank, check browser console (F12) for errors
+```
+
+### Windows-Specific Issues
+
+**`venv\Scripts\activate` gives permission error**
+
+```powershell
+# Run PowerShell as Administrator and execute:
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+# Then retry activation
+```
+
+**`python` command not found**
+
+```bash
+# Try py instead:
+py -m venv venv
+py -m uvicorn backend.main:app --reload --port 8000
+```
+
+---
+
+## Dataset
+
+The system uses the official IIT Bombay Techfest synthetic dataset of **250,000 UPI transactions**.
+
+| Column               | Type    | Description                                            |
+| -------------------- | ------- | ------------------------------------------------------ |
+| `transaction_id`     | String  | Unique identifier                                      |
+| `timestamp`          | Date    | Transaction date and time                              |
+| `transaction_type`   | String  | P2P, P2M, Bill Payment, Recharge                       |
+| `merchant_category`  | String  | Food, Grocery, Fuel, etc.                              |
+| `amount (INR)`       | Integer | Transaction value in rupees                            |
+| `transaction_status` | String  | SUCCESS or FAILED                                      |
+| `sender_age_group`   | String  | 18-25, 26-35, 36-45, 46-55, 56+                        |
+| `receiver_age_group` | String  | Same groups (P2P only)                                 |
+| `sender_state`       | String  | Indian state of sender                                 |
+| `sender_bank`        | String  | SBI, HDFC, ICICI, Axis, PNB, Kotak, IndusInd, Yes Bank |
+| `receiver_bank`      | String  | Same banks                                             |
+| `device_type`        | String  | Android, iOS, Web                                      |
+| `network_type`       | String  | 4G, 5G, WiFi, 3G                                       |
+| `fraud_flag`         | Integer | 1 = flagged for review, 0 = normal                     |
+| `hour_of_day`        | Integer | 0-23                                                   |
+| `day_of_week`        | String  | Monday-Sunday                                          |
+| `is_weekend`         | Integer | 1 = weekend, 0 = weekday                               |
+
+> ⚠️ This dataset is synthetic and provided by IIT Bombay Techfest organizers for competition use only.
+
+---
+
+<div align="center">
+
+Built for **IIT Bombay Techfest 2025-26**
+
+InsightX: Leadership Analytics Challenge
+
+</div>
