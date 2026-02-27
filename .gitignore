@@ -1,10 +1,25 @@
-venv/
+# Runtime generated files - never commit
+*.db
+backend/data/*.db
+
+# Environment secrets - never commit
 .env
+
+# Python
 __pycache__/
 *.pyc
-.DS_Store
+*.pyo
+.pytest_cache/
+venv/
+.venv/
+
+# Node
 node_modules/
 frontend/.next/
-*.csv
+frontend/out/
+
+# OS
+.DS_Store
+Thumbs.db
+
 notebooks/
-*.db
