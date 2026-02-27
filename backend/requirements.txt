@@ -1,9 +1,26 @@
+# InsightX Backend Dependencies
+# Python 3.11+ required
+# Install with: pip install -r requirements.txt
+
+# Web Framework
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
-duckdb==0.10.3
+
+# AI & Language Models
 openai==1.30.0
+
+# Database
+duckdb==0.10.3
+
+# Data Processing
+pandas==2.2.2
+scipy==1.13.0
+
+# Utilities
 python-dotenv==1.0.1
 pydantic==2.7.1
-pandas==2.2.2
+jinja2==3.1.4
+
+# Testing & HTTP Client
 pytest==8.2.0
 httpx==0.27.0
