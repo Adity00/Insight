@@ -92,8 +92,8 @@ function Navbar() {
     >
       <div className="max-w-[1280px] mx-auto flex items-center justify-between h-[72px] px-6 md:px-10">
         <div className="flex items-center gap-3">
-          <img src="/paytm-logo.png" alt="Paytm" className="h-[14px] w-auto" />
-          <span className="text-[26px] font-[800] tracking-[-0.04em]" style={{
+          <img src="/paytm-logo.png" alt="Paytm" className="h-[18px] w-auto" />
+          <span className="text-[22px] font-[800] tracking-[-0.04em]" style={{
             background: 'linear-gradient(135deg, #818cf8 0%, #6366f1 35%, #06b6d4 70%, #22d3ee 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
