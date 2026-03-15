@@ -1,452 +1,555 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { api, DashboardStats, Session } from '@/lib/api';
-import { ChatWindow } from '@/components/ChatWindow';
-import { KPICards } from '@/components/KPICards';
+import React, { useRef } from 'react';
+import { motion, useInView, useScroll, useTransform } from 'framer-motion';
+import Link from 'next/link';
 import {
-  Sparkles, MessageSquare, Search, Plus, Menu, Moon, Sun, Bell,
-  LayoutDashboard, Settings, MoreVertical, Pin, Briefcase, ChevronDown,
-  Edit2, Trash2, Check, X
+  ArrowRight, Sparkles, BarChart2, MessageSquare, Shield,
+  Zap, Database, Brain, TrendingUp, ChevronRight, Globe,
+  Lock, Layers, Activity
 } from 'lucide-react';
 
-export default function Home() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [sessionId, setSessionId] = useState<string>("");
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
-  const [viewMode, setViewMode] = useState<'chat' | 'dashboard'>('chat');
-  const [showNotifications, setShowNotifications] = useState(false);
+/* ─── Animation Variants ─── */
+const fadeUp = {
+  hidden: { opacity: 0, y: 40 },
+  visible: (i: number = 0) => ({
+    opacity: 1, y: 0,
+    transition: { duration: 0.7, delay: i * 0.12, ease: [0.25, 0.4, 0.25, 1] }
+  })
+};
 
+const scaleIn = {
+  hidden: { opacity: 0, scale: 0.9 },
+  visible: { opacity: 1, scale: 1, transition: { duration: 0.6, ease: [0.25, 0.4, 0.25, 1] } }
+};
 
-  // New states for chat management
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+const stagger = {
+  visible: { transition: { staggerChildren: 0.1 } }
+};
 
-  // Click outside listener to close menus
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      // If clicking inside a dropdown or a trigger, don't close here
-      if ((e.target as Element).closest('.dropdown-menu') || (e.target as Element).closest('.dropdown-trigger')) {
-        return;
-      }
-      setOpenMenuId(null);
-    };
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, []);
+/* ─── Animated Section Wrapper ─── */
+function AnimatedSection({ children, className = '', delay = 0 }: { children: React.ReactNode; className?: string; delay?: number }) {
+  const ref = useRef(null);
+  const inView = useInView(ref, { once: true, margin: '-80px' });
+  return (
+    <motion.div
+      ref={ref}
+      initial="hidden"
+      animate={inView ? "visible" : "hidden"}
+      variants={fadeUp}
+      custom={delay}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
+/* ─── Floating Particle Background ─── */
+function ParticleGrid() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.08)_0%,transparent_70%)]" />
+      {[...Array(6)].map((_, i) => (
+        <motion.div
+          key={i}
+          className="absolute rounded-full"
+          style={{
+            width: 300 + i * 80,
+            height: 300 + i * 80,
+            left: `${10 + i * 15}%`,
+            top: `${5 + i * 12}%`,
+            background: `radial-gradient(circle, ${
+              i % 2 === 0
+                ? 'rgba(99,102,241,0.06)'
+                : 'rgba(6,182,212,0.05)'
+            } 0%, transparent 70%)`,
+          }}
+          animate={{
+            x: [0, 20, -10, 0],
+            y: [0, -15, 10, 0],
+            scale: [1, 1.05, 0.97, 1],
+          }}
+          transition={{
+            duration: 12 + i * 2,
+            repeat: Infinity,
+            ease: 'easeInOut',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
-  useEffect(() => {
-    if (sessionId) {
-      localStorage.setItem("insightx_active_session", sessionId);
-    }
-  }, [sessionId]);
+/* ─── Nav ─── */
+function Navbar() {
+  return (
+    <motion.nav
+      initial={{ y: -20, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.6 }}
+      className="fixed top-0 left-0 right-0 z-50 backdrop-blur-xl bg-[#09090b]/80 border-b border-white/5"
+    >
+      <div className="max-w-[1280px] mx-auto flex items-center justify-between h-[72px] px-6 md:px-10">
+        <div className="flex items-center gap-3">
+          <img src="/paytm-logo.png" alt="Paytm" className="h-[14px] w-auto" />
+          <span className="text-[26px] font-[800] tracking-[-0.04em]" style={{
+            background: 'linear-gradient(135deg, #818cf8 0%, #6366f1 35%, #06b6d4 70%, #22d3ee 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>InsightX</span>
+        </div>
+        <div className="hidden md:flex items-center gap-8 text-[14px] text-zinc-400 font-[500]">
+          <a href="#features" className="hover:text-white transition-colors">Features</a>
+          <a href="#how-it-works" className="hover:text-white transition-colors">How It Works</a>
+          <a href="#metrics" className="hover:text-white transition-colors">Metrics</a>
+          <a href="#security" className="hover:text-white transition-colors">Security</a>
+        </div>
+        <Link href="/dashboard">
+          <motion.button
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            className="px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-cyan-500 text-white text-[14px] font-[600] rounded-lg shadow-lg shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-shadow"
+          >
+            Launch Dashboard
+          </motion.button>
+        </Link>
+      </div>
+    </motion.nav>
+  );
+}
 
-  useEffect(() => {
-    async function init() {
-      try {
-        const s = await api.getDashboard();
-        setStats(s);
-
-        const sessionsList = await api.getSessions();
-        const storedSession = localStorage.getItem("insightx_active_session");
-
-        if (storedSession && sessionsList.some(msg => msg.session_id === storedSession)) {
-          setSessionId(storedSession);
-        } else {
-          localStorage.removeItem("insightx_active_session");
-          if (sessionsList.length === 0) {
-            const { session_id } = await api.createSession();
-            setSessionId(session_id);
-            localStorage.setItem("insightx_active_session", session_id);
-            // Refresh list after creation
-            const newList = await api.getSessions();
-            setSessions(newList);
-            return;
-          }
-        }
-        setSessions(sessionsList);
-      } catch (err) {
-        console.error("Init failed:", err);
-      }
-    }
-    init();
-  }, []);
-
-
+/* ─── Hero Section ─── */
+function HeroSection() {
+  const ref = useRef(null);
+  const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end start'] });
+  const y = useTransform(scrollYProgress, [0, 1], [0, 150]);
+  const opacity = useTransform(scrollYProgress, [0, 0.6], [1, 0]);
 
   return (
-    <div className={`min-h-screen flex ${darkMode ? 'dark' : ''}`}>
-      <div className="flex-1 flex bg-app-custom text-[var(--text-primary)] transition-colors duration-300 relative overflow-hidden">
+    <section ref={ref} className="relative min-h-screen flex items-center justify-center overflow-hidden pt-[72px]">
+      <ParticleGrid />
 
-        {/* Sidebar */}
-        <div className={`${sidebarOpen ? 'w-[260px]' : 'w-[72px]'} flex-shrink-0 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] bg-[var(--bg-sidebar)] border-r border-[var(--border-subtle)] flex flex-col z-20`}>
+      {/* Gradient orbs */}
+      <div className="absolute top-[15%] left-[10%] w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px] animate-pulse" />
+      <div className="absolute bottom-[10%] right-[10%] w-[400px] h-[400px] bg-cyan-500/8 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '1s' }} />
 
-          {/* Workspace Switcher */}
-          <div className="h-[64px] flex items-center justify-between px-4 border-b border-[var(--border-subtle)]">
-            <div className={`flex items-center gap-[12px] ${!sidebarOpen && 'justify-center w-full'} cursor-pointer hover:opacity-80 transition-opacity overflow-hidden group py-2`}>
-              <div className="w-[32px] h-[32px] rounded-[8px] bg-accent-primary flex items-center justify-center text-[var(--bg-surface)] shrink-0 shadow-[var(--shadow-sm)] transition-transform group-hover:scale-105 duration-200">
-                <Briefcase size={16} />
-              </div>
-              {sidebarOpen && (
-                <div className="flex flex-col animate-fade-in text-left">
-                  <span className="text-[14px] font-[600] leading-tight text-[var(--text-primary)] tracking-tight whitespace-nowrap">Acme Corp</span>
-                  <span className="text-[12px] text-[var(--text-muted)] font-[500] uppercase flex items-center gap-1">Admin <ChevronDown size={10} className="mt-[1px]" /></span>
-                </div>
-              )}
-            </div>
-            {sidebarOpen && (
-              <button aria-label="Collapse Menu" onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-[8px] hover:bg-[var(--border-subtle)] text-[var(--text-secondary)] transition-all duration-200">
-                <Menu size={18} />
-              </button>
-            )}
-          </div>
+      <motion.div style={{ y, opacity }} className="relative z-10 text-center max-w-[900px] mx-auto px-6">
+        {/* Badge */}
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-[13px] text-zinc-300 font-[500] mb-8 backdrop-blur-sm"
+        >
+          <span className="flex h-2 w-2 relative">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span>
+          </span>
+          Powered by GPT-4 &bull; 250K+ UPI Transactions Analyzed
+        </motion.div>
 
-          <div className="p-4 flex-1 overflow-y-auto scrollbar-hide flex flex-col gap-5">
-            <button
-              onClick={async () => {
-                try {
-                  const { session_id } = await api.createSession();
-                  setSessionId(session_id);
-                  localStorage.setItem("insightx_active_session", session_id);
-                  const updated = await api.getSessions();
-                  setSessions(updated);
-                } catch (err) {
-                  console.error('New chat failed:', err);
-                }
-              }}
-              className={`flex items-center gap-[8px] w-full bg-accent-primary hover:opacity-90 text-[var(--bg-surface)] rounded-[8px] transition-all duration-200 shadow-[var(--shadow-sm)] hover:translate-y-[-1px] hover:shadow-[var(--shadow-md)] active:scale-[0.98] ${sidebarOpen ? 'px-4 py-[10px]' : 'justify-center p-3'}`}
+        {/* Headline */}
+        <motion.h1
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, delay: 0.3, ease: [0.25, 0.4, 0.25, 1] }}
+          className="text-[48px] md:text-[72px] font-[800] leading-[1.05] tracking-[-0.04em] mb-6"
+        >
+          <span className="text-white">AI-Powered </span>
+          <span style={{
+            background: 'linear-gradient(135deg, #818cf8 0%, #6366f1 30%, #06b6d4 70%, #22d3ee 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+          }}>
+            UPI Analytics
+          </span>
+          <br />
+          <span className="text-white">in Plain English</span>
+        </motion.h1>
+
+        {/* Subheadline */}
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.5 }}
+          className="text-[18px] md:text-[20px] text-zinc-400 max-w-[640px] mx-auto leading-[1.7] font-[400] mb-10"
+        >
+          Ask questions about transaction volumes, failure rates, fraud patterns, and merchant insights.
+          InsightX converts your questions into real-time SQL queries and delivers visual analytics instantly.
+        </motion.p>
+
+        {/* CTAs */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.7 }}
+          className="flex flex-col sm:flex-row items-center justify-center gap-4"
+        >
+          <Link href="/dashboard">
+            <motion.button
+              whileHover={{ scale: 1.04, boxShadow: '0 20px 40px rgba(99,102,241,0.3)' }}
+              whileTap={{ scale: 0.97 }}
+              className="group px-8 py-4 bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-500 text-white text-[16px] font-[700] rounded-xl shadow-2xl shadow-indigo-500/25 flex items-center gap-3 transition-all"
             >
-              <Plus size={18} className="shrink-0" />
-              {sidebarOpen && <span className="font-[600] text-[14px] truncate tracking-[-0.01em]">New Chat</span>}
-            </button>
+              Start Analyzing
+              <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+            </motion.button>
+          </Link>
+          <a href="#how-it-works">
+            <motion.button
+              whileHover={{ scale: 1.03, borderColor: 'rgba(255,255,255,0.2)' }}
+              whileTap={{ scale: 0.97 }}
+              className="px-8 py-4 bg-white/5 border border-white/10 text-zinc-300 text-[16px] font-[600] rounded-xl backdrop-blur-sm hover:bg-white/8 transition-all flex items-center gap-2"
+            >
+              See How It Works
+              <ChevronRight size={16} />
+            </motion.button>
+          </a>
+        </motion.div>
 
-            {sidebarOpen && (
-              <div className="relative group transition-all duration-200 mt-2">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                <input type="text" aria-label="Search" placeholder="Search conversations..." className="w-full bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-[8px] py-1.5 pl-9 pr-3 text-[14px] focus:outline-none focus:border-[var(--accent-solid)] transition-all placeholder-[var(--text-muted)] text-[var(--text-primary)] shadow-sm" />
-              </div>
-            )}
-
-            <div className="flex flex-col gap-[4px]">
-              {sidebarOpen && <p className="text-[12px] font-[500] text-[var(--text-muted)] uppercase tracking-[0.08em] mb-2 px-2 mt-2">Pinned</p>}
-              <div className={`flex items-center justify-between rounded-[8px] transition-all p-2 hover:bg-[var(--bg-surface)] group cursor-pointer h-[40px] ${!sidebarOpen && 'justify-center'}`}>
-                <div className="flex items-center gap-[12px] overflow-hidden">
-                  <Pin size={14} className="text-[var(--accent-solid)] shrink-0" fill="currentColor" fillOpacity={0.2} />
-                  {sidebarOpen && <span className="text-[14px] font-[400] text-[var(--text-primary)] truncate">Q3 Fraud Report</span>}
-                </div>
-              </div>
+        {/* Mock terminal / query preview */}
+        <motion.div
+          initial={{ opacity: 0, y: 40, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.9, delay: 1.0, ease: [0.25, 0.4, 0.25, 1] }}
+          className="mt-16 mx-auto max-w-[700px] rounded-2xl bg-[#111113]/80 border border-white/8 shadow-2xl shadow-black/40 backdrop-blur-md overflow-hidden"
+        >
+          <div className="flex items-center gap-2 px-5 py-3 border-b border-white/5">
+            <div className="w-3 h-3 rounded-full bg-red-500/80" />
+            <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
+            <div className="w-3 h-3 rounded-full bg-green-500/80" />
+            <span className="ml-3 text-[12px] text-zinc-500 font-mono">InsightX Engine v4.0</span>
+          </div>
+          <div className="p-6 font-mono text-[14px]">
+            <div className="flex items-start gap-3 mb-4">
+              <span className="text-indigo-400 font-[700]">You</span>
+              <span className="text-zinc-300">Which state has the highest fraud flag rate?</span>
             </div>
-
-            <div className="flex flex-col gap-[4px]">
-              {sidebarOpen && <p className="text-[12px] font-[500] text-[var(--text-muted)] uppercase tracking-[0.08em] mb-2 px-2 mt-4">Recent</p>}
-
-              {sessions.slice(0, 8).map((session) => (
-                <div
-                  key={session.session_id}
-                  onClick={() => {
-                    if (session.session_id === sessionId) return;
-                    if (editingSessionId !== session.session_id) {
-                      setSessionId(session.session_id);
-                      localStorage.setItem("insightx_active_session", session.session_id);
-                    }
-                  }}
-                  className={`flex items-center justify-between rounded-[8px] transition-all p-2 group cursor-pointer h-[40px] relative ${session.session_id === sessionId
-                    ? 'bg-[var(--bg-surface)] text-[var(--accent-solid)]'
-                    : 'hover:bg-[var(--bg-surface)] text-[var(--text-secondary)]'
-                    } ${!sidebarOpen && 'justify-center'}`}
+            <div className="flex items-start gap-3">
+              <span className="text-cyan-400 font-[700]">AI</span>
+              <div className="text-zinc-400">
+                <motion.span
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 1.4, duration: 0.5 }}
                 >
-                  <div className="flex items-center gap-[12px] overflow-hidden w-full">
-                    <MessageSquare size={14} className="shrink-0" />
-                    {sidebarOpen && (
-                      editingSessionId === session.session_id ? (
-                        <div className="flex items-center w-full gap-1" onClick={(e) => e.stopPropagation()}>
-                          <input
-                            type="text"
-                            autoFocus
-                            value={editTitle}
-                            onChange={(e) => setEditTitle(e.target.value)}
-                            onKeyDown={async (e) => {
-                              if (e.key === 'Enter') {
-                                if (editTitle.trim() && editTitle.trim().length <= 60) {
-                                  try {
-                                    await api.renameSession(session.session_id, editTitle.trim());
-                                    const updated = await api.getSessions();
-                                    setSessions(updated);
-                                    setEditingSessionId(null);
-                                  } catch (err) {
-                                    console.error("Rename failed", err);
-                                  }
-                                }
-                              } else if (e.key === 'Escape') {
-                                setEditingSessionId(null);
-                              }
-                            }}
-                            className="bg-[var(--bg-app)] border border-[var(--border-strong)] rounded px-1.5 py-0.5 text-[13px] text-[var(--text-primary)] w-full focus:outline-none focus:border-[var(--accent-solid)]"
-                          />
-                          <button onClick={async (e) => {
-                            e.stopPropagation();
-                            if (editTitle.trim() && editTitle.trim().length <= 60) {
-                              try {
-                                await api.renameSession(session.session_id, editTitle.trim());
-                                const updated = await api.getSessions();
-                                setSessions(updated);
-                                setEditingSessionId(null);
-                              } catch (err) {
-                                console.error("Rename failed", err);
-                              }
-                            }
-                          }} className="p-1 hover:bg-[var(--bg-elevated)] rounded text-[var(--success-text)] transition-colors">
-                            <Check size={14} />
-                          </button>
-                          <button onClick={(e) => { e.stopPropagation(); setEditingSessionId(null); }} className="p-1 hover:bg-[var(--bg-elevated)] rounded text-[var(--text-muted)] transition-colors">
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-[14px] font-[400] truncate max-w-[140px]">
-                          {session.title || `Session ${session.turn_count > 0 ? `(${session.turn_count} turns)` : '(new)'}`}
-                        </span>
-                      )
-                    )}
-                  </div>
-
-                  {sidebarOpen && editingSessionId !== session.session_id && session.session_id === sessionId && (
-                    <div className="relative dropdown-container">
-                      <button
-                        className={`dropdown-trigger p-1 hover:bg-[var(--border-medium)] rounded text-[var(--text-muted)] transition-all pointer-events-auto ${openMenuId === session.session_id ? 'opacity-100 bg-[var(--border-medium)]' : 'opacity-0 group-hover:opacity-100'}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenMenuId(prev => prev === session.session_id ? null : session.session_id);
-                        }}
-                      >
-                        <MoreVertical size={14} className="pointer-events-none" />
-                      </button>
-
-                      {/* Dropdown Menu */}
-                      {openMenuId === session.session_id && (
-                        <div className="dropdown-menu absolute right-0 top-full mt-1 w-[140px] bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[8px] shadow-[var(--shadow-lg)] py-1 z-[1000] animate-fade-in origin-top-right pointer-events-auto">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditTitle(session.title || "");
-                              setEditingSessionId(session.session_id);
-                              setOpenMenuId(null);
-                            }}
-                            className="w-full text-left px-3 py-1.5 text-[13px] text-[var(--text-primary)] hover:bg-[var(--bg-surface)] flex items-center gap-2 transition-colors pointer-events-auto"
-                          >
-                            <Edit2 size={13} className="pointer-events-none" />
-                            Rename
-                          </button>
-                          <div className="h-[1px] bg-[var(--border-subtle)] my-1"></div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowDeleteConfirm(session.session_id);
-                              setOpenMenuId(null);
-                            }}
-                            className="w-full text-left px-3 py-1.5 text-[13px] text-[var(--error-text)] hover:bg-[var(--bg-surface)] flex items-center gap-2 transition-colors pointer-events-auto"
-                          >
-                            <Trash2 size={13} className="pointer-events-none" />
-                            Delete Chat
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div className="flex flex-col gap-[4px] mt-2 border-t border-[var(--border-subtle)] pt-4">
-              {sidebarOpen && <p className="text-[12px] font-[500] text-[var(--text-muted)] uppercase tracking-[0.08em] mb-2 px-2">Views</p>}
-              <button onClick={() => setViewMode('chat')} className={`flex items-center gap-[12px] rounded-[8px] h-[40px] transition-all p-2 ${viewMode === 'chat' ? 'bg-[var(--bg-surface)] text-[var(--accent-solid)]' : 'hover:bg-[var(--bg-surface)] text-[var(--text-secondary)]'} group ${!sidebarOpen && 'justify-center'}`}>
-                <MessageSquare size={16} className="shrink-0" />
-                {sidebarOpen && <span className="text-[14px] font-[500] truncate">Chat Interface</span>}
-              </button>
-              <button onClick={() => setViewMode('dashboard')} className={`flex items-center gap-[12px] rounded-[8px] h-[40px] transition-all p-2 ${viewMode === 'dashboard' ? 'bg-[var(--bg-surface)] text-[var(--accent-solid)]' : 'hover:bg-[var(--bg-surface)] text-[var(--text-secondary)]'} group ${!sidebarOpen && 'justify-center'}`}>
-                <LayoutDashboard size={16} className="shrink-0" />
-                {sidebarOpen && <span className="text-[14px] font-[500] truncate">Dashboard Board</span>}
-              </button>
+                  Maharashtra leads with a 0.21% fraud flag rate across 37,427 transactions
+                  — 15% above the national average of 0.19%.
+                </motion.span>
+              </div>
             </div>
           </div>
+        </motion.div>
+      </motion.div>
+    </section>
+  );
+}
 
-          <div className="p-[16px] border-t border-[var(--border-subtle)] bg-[var(--bg-sidebar)]">
-            <button aria-label="Settings" className={`flex items-center gap-[12px] w-full rounded-[8px] transition-all p-[8px] hover:bg-[var(--border-subtle)] text-[var(--text-secondary)] ${!sidebarOpen && 'justify-center'}`}>
-              <Settings size={18} className="shrink-0" />
-              {sidebarOpen && <span className="text-[14px] font-[500]">Settings</span>}
-            </button>
-          </div>
-        </div>
+/* ─── Features Grid ─── */
+function FeaturesSection() {
+  const features = [
+    {
+      icon: <MessageSquare size={24} />,
+      title: 'Natural Language Queries',
+      desc: 'Ask questions in plain English. No SQL knowledge needed — InsightX generates precise DuckDB queries automatically.',
+      gradient: 'from-indigo-500/20 to-indigo-500/5'
+    },
+    {
+      icon: <BarChart2 size={24} />,
+      title: 'Real-Time Visualizations',
+      desc: 'Every query produces interactive bar charts, line graphs, and data tables. Switch between views instantly.',
+      gradient: 'from-cyan-500/20 to-cyan-500/5'
+    },
+    {
+      icon: <Brain size={24} />,
+      title: 'Compound Question Handling',
+      desc: 'Ask multiple questions at once. InsightX decomposes them, runs each query, and synthesizes a unified answer.',
+      gradient: 'from-purple-500/20 to-purple-500/5'
+    },
+    {
+      icon: <Shield size={24} />,
+      title: 'Fraud Pattern Detection',
+      desc: 'Identify fraud-flagged transactions across states, banks, devices, and time periods with precision analytics.',
+      gradient: 'from-rose-500/20 to-rose-500/5'
+    },
+    {
+      icon: <Zap size={24} />,
+      title: 'Conversational Memory',
+      desc: 'Multi-turn context tracking. Say "compare that with HDFC" and InsightX resolves pronouns from conversation history.',
+      gradient: 'from-amber-500/20 to-amber-500/5'
+    },
+    {
+      icon: <TrendingUp size={24} />,
+      title: 'Statistical Enrichment',
+      desc: 'Z-score analysis, trend detection, and anomaly flagging computed automatically on every query result.',
+      gradient: 'from-emerald-500/20 to-emerald-500/5'
+    },
+  ];
 
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col min-w-0 relative h-screen bg-app-custom">
+  return (
+    <section id="features" className="relative py-32 px-6">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(99,102,241,0.05)_0%,transparent_50%)]" />
+      <div className="max-w-[1200px] mx-auto relative">
+        <AnimatedSection className="text-center mb-16">
+          <span className="text-[13px] font-[600] text-indigo-400 uppercase tracking-[0.15em] mb-4 block">Capabilities</span>
+          <h2 className="text-[40px] md:text-[52px] font-[800] text-white tracking-[-0.03em] leading-[1.1] mb-5">
+            Built for <span className="bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">serious analytics</span>
+          </h2>
+          <p className="text-[18px] text-zinc-400 max-w-[560px] mx-auto leading-[1.7]">
+            Everything a PM needs to extract insights from 250,000 UPI transactions — powered by GPT-4 and DuckDB.
+          </p>
+        </AnimatedSection>
 
-          <header className="h-[60px] flex items-center justify-between px-[24px] border-b border-[var(--border-subtle)] bg-[var(--bg-header)] backdrop-blur-[14px] sticky top-0 z-10 transition-colors duration-300">
-            <div className="flex items-center gap-[16px]">
-              {!sidebarOpen && (
-                <button aria-label="Expand Menu" onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-[8px] hover:bg-[var(--border-subtle)] text-[var(--text-secondary)] transition-all duration-200">
-                  <Menu size={18} />
-                </button>
-              )}
-              <div className="flex items-center text-[14px] text-[var(--text-secondary)] animate-fade-in font-[400] cursor-default bg-[var(--bg-elevated)] border border-[var(--border-subtle)] px-[12px] py-[4px] rounded-[8px]">
-                InsightX <span className="mx-2 text-[var(--border-medium)]">/</span>
-                <span className="text-[var(--text-primary)] font-[500] flex items-center gap-1.5">
-                  {viewMode === 'chat' ? <><MessageSquare size={14} /> Chat</> : <><LayoutDashboard size={14} /> Dashboard</>}
-                </span>
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: '-60px' }}
+          variants={stagger}
+          className="grid md:grid-cols-2 lg:grid-cols-3 gap-5"
+        >
+          {features.map((f, i) => (
+            <motion.div
+              key={i}
+              variants={fadeUp}
+              custom={i}
+              whileHover={{ y: -6, borderColor: 'rgba(255,255,255,0.12)' }}
+              className="group p-7 rounded-2xl bg-[#111113]/60 border border-white/6 backdrop-blur-sm hover:bg-[#151518]/80 transition-all duration-300 cursor-default"
+            >
+              <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${f.gradient} flex items-center justify-center text-white mb-5 group-hover:scale-110 transition-transform duration-300`}>
+                {f.icon}
               </div>
-            </div>
+              <h3 className="text-[17px] font-[700] text-white mb-2.5 tracking-[-0.01em]">{f.title}</h3>
+              <p className="text-[14px] text-zinc-400 leading-[1.7]">{f.desc}</p>
+            </motion.div>
+          ))}
+        </motion.div>
+      </div>
+    </section>
+  );
+}
 
-            <div className="flex items-center gap-[16px]">
-              {/* System Status Indicators */}
-              <div className="hidden md:flex items-center gap-[24px] pr-[24px] border-r border-[var(--border-subtle)]">
-                <div className="flex items-center gap-[8px] text-[12px] font-[600] text-[var(--success-text)] bg-[var(--success-bg)] px-[12px] py-[4px] rounded-full">
-                  <div className="w-[6px] h-[6px] rounded-full bg-[var(--success-text)] animate-pulse"></div>
-                  API Operational
-                </div>
+/* ─── How It Works ─── */
+function HowItWorksSection() {
+  const steps = [
+    {
+      step: '01',
+      title: 'Ask a Question',
+      desc: 'Type your analytics question in plain English — "Which bank has the highest failure rate?" or even multiple questions at once.',
+      icon: <MessageSquare size={28} />
+    },
+    {
+      step: '02',
+      title: 'AI Generates SQL',
+      desc: 'GPT-4 converts your question into a precise DuckDB SQL query, respecting schema constraints, NULL handling, and rate calculations.',
+      icon: <Database size={28} />
+    },
+    {
+      step: '03',
+      title: 'Query Execution',
+      desc: 'The validated SQL runs against 250,000 real UPI transactions in DuckDB. Results are enriched with z-scores and trend analysis.',
+      icon: <Zap size={28} />
+    },
+    {
+      step: '04',
+      title: 'Visual Insights',
+      desc: 'InsightX narrates findings like a McKinsey analyst — with charts, benchmarks, anomaly flags, and actionable recommendations.',
+      icon: <TrendingUp size={28} />
+    },
+  ];
 
-                <div className="flex flex-col gap-[4px]">
-                  <div className="flex items-center justify-between text-[11px] font-[600] text-[var(--text-muted)] uppercase tracking-[0.04em] w-[120px]">
-                    <span>API CALLS</span> <span>88%</span>
-                  </div>
-                  <div className="w-[120px] h-[4px] bg-[var(--border-subtle)] rounded-full overflow-hidden">
-                    <div className="h-full bg-[var(--accent-solid)] rounded-full w-[88%]"></div>
-                  </div>
-                </div>
-              </div>
+  return (
+    <section id="how-it-works" className="relative py-32 px-6">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,rgba(6,182,212,0.04)_0%,transparent_50%)]" />
+      <div className="max-w-[1100px] mx-auto relative">
+        <AnimatedSection className="text-center mb-20">
+          <span className="text-[13px] font-[600] text-cyan-400 uppercase tracking-[0.15em] mb-4 block">How It Works</span>
+          <h2 className="text-[40px] md:text-[52px] font-[800] text-white tracking-[-0.03em] leading-[1.1] mb-5">
+            From question to <span className="bg-gradient-to-r from-cyan-400 to-indigo-400 bg-clip-text text-transparent">insight in seconds</span>
+          </h2>
+        </AnimatedSection>
 
-              <div className="flex items-center gap-[8px]">
-                <button
-                  aria-label="Toggle Theme"
-                  onClick={() => setDarkMode(!darkMode)}
-                  className="w-[36px] h-[36px] rounded-[8px] flex items-center justify-center hover:bg-[var(--border-subtle)] text-[var(--text-secondary)] transition-all duration-200 hover:text-[var(--text-primary)]"
-                >
-                  {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-                </button>
-                <div className="relative">
-                  <button
-                    onClick={() => setShowNotifications(!showNotifications)}
-                    aria-label="Alerts"
-                    className="w-[36px] h-[36px] rounded-[8px] flex items-center justify-center hover:bg-[var(--border-subtle)] text-[var(--text-secondary)] transition-all duration-200 hover:text-[var(--text-primary)] relative"
+        <div className="relative">
+          {/* Vertical connector line */}
+          <div className="absolute left-[43px] top-0 bottom-0 w-px bg-gradient-to-b from-indigo-500/30 via-cyan-500/20 to-transparent hidden md:block" />
+
+          <div className="flex flex-col gap-12">
+            {steps.map((s, i) => (
+              <AnimatedSection key={i} delay={i * 0.15}>
+                <div className="flex items-start gap-8 group">
+                  <motion.div
+                    whileHover={{ scale: 1.1, rotate: 5 }}
+                    className="relative w-[86px] h-[86px] rounded-2xl bg-gradient-to-br from-[#1a1a2e] to-[#111113] border border-white/8 flex items-center justify-center text-indigo-400 shrink-0 shadow-xl shadow-black/20 group-hover:border-indigo-500/30 transition-colors"
                   >
-                    <Bell size={18} />
-                    <span className="absolute top-[6px] right-[6px] w-[8px] h-[8px] rounded-full bg-[var(--error-text)] border-[2px] border-[var(--bg-surface)]"></span>
-                  </button>
-                  {/* Notification dropdown */}
-                  {showNotifications && (
-                    <div className="absolute top-12 right-0 w-[300px] bg-[var(--bg-elevated)] border border-[var(--border-subtle)] rounded-[12px] shadow-[var(--shadow-lg)] p-[12px] animate-fade-in z-50">
-                      <div className="flex items-center justify-between px-2 pb-3 mb-2 border-b border-[var(--border-subtle)]">
-                        <span className="text-[12px] font-[600] uppercase tracking-[0.04em] text-[var(--text-muted)]">Notifications</span>
-                        <button className="text-[12px] text-[var(--accent-solid)] hover:underline font-[500]">Mark all read</button>
-                      </div>
-                      <div className="p-3 hover:bg-app-custom rounded-[8px] cursor-pointer transition-colors">
-                        <p className="text-[14px] text-[var(--text-primary)] font-[500] leading-tight mb-1">Weekly Report Generated</p>
-                        <p className="text-[12px] text-[var(--text-muted)]">2 hours ago</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="w-[36px] h-[36px] rounded-[8px] bg-accent-primary ml-2 shadow-[var(--shadow-sm)] flex items-center justify-center text-[var(--bg-surface)] text-[14px] font-[600] cursor-pointer hover:opacity-90 transition-opacity">
-                  A
-                </div>
-              </div>
-            </div>
-          </header>
-
-          {/* Central Container */}
-          <main className="flex-1 relative overflow-auto scrollbar-hide">
-            {viewMode === 'chat' ? (
-              sessionId ? (
-                <ChatWindow key={sessionId} sessionId={sessionId} stats={stats} />
-              ) : (
-                <div className="flex w-full h-full items-center justify-center text-[var(--text-secondary)]">
-                  <div className="flex flex-col items-center animate-fade-in">
-                    <MessageSquare size={48} className="mb-4 text-[var(--border-strong)] opacity-60" />
-                    <p className="text-[16px] font-[500] tracking-tight">Select a chat or create a new one</p>
+                    {s.icon}
+                    <span className="absolute -top-2 -right-2 text-[11px] font-[800] bg-gradient-to-r from-indigo-500 to-cyan-500 text-white w-7 h-7 rounded-lg flex items-center justify-center shadow-lg">{s.step}</span>
+                  </motion.div>
+                  <div className="pt-2">
+                    <h3 className="text-[20px] font-[700] text-white mb-2 tracking-[-0.01em]">{s.title}</h3>
+                    <p className="text-[15px] text-zinc-400 leading-[1.8] max-w-[520px]">{s.desc}</p>
                   </div>
                 </div>
-              )
-            ) : (
-              <div className="max-w-[1100px] mx-auto p-[32px] md:pt-[64px] animate-fade-in">
-                <div className="flex justify-between items-end mb-[32px]">
-                  <div>
-                    <h2 className="text-[32px] font-[600] text-[var(--text-primary)] tracking-[-0.02em] leading-[40px] mb-2">Dashboard</h2>
-                    <p className="text-[16px] text-[var(--text-secondary)] tracking-tight">A comprehensive overview of your transactions dataset</p>
-                  </div>
-                  <button className="h-[40px] px-[16px] rounded-[8px] bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[14px] font-[600] text-[var(--text-primary)] shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-all flex items-center gap-2 hover:translate-y-[-1px]">
-                    <LayoutDashboard size={16} /> Customize Layout
-                  </button>
-                </div>
-                <KPICards stats={stats} />
-              </div>
-            )}
-          </main>
-
+              </AnimatedSection>
+            ))}
+          </div>
         </div>
       </div>
+    </section>
+  );
+}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center backdrop-blur-sm animate-fade-in" onClick={() => setShowDeleteConfirm(null)}>
-          <div className="bg-[var(--bg-elevated)] w-full max-w-[400px] rounded-[16px] shadow-[var(--shadow-2xl)] border border-[var(--border-subtle)] overflow-hidden animate-slide-up" onClick={(e) => e.stopPropagation()}>
-            <div className="p-6">
-              <div className="w-[48px] h-[48px] rounded-full bg-[var(--error-bg)] flex items-center justify-center text-[var(--error-text)] mb-4">
-                <Trash2 size={24} />
+/* ─── Metrics / Stats ─── */
+function MetricsSection() {
+  const metrics = [
+    { value: '250K+', label: 'UPI Transactions', icon: <Activity size={20} /> },
+    { value: '8', label: 'Banking Partners', icon: <Database size={20} /> },
+    { value: '29', label: 'Indian States', icon: <Globe size={20} /> },
+    { value: '50+', label: 'Query Types', icon: <Brain size={20} /> },
+  ];
+
+  return (
+    <section id="metrics" className="relative py-28 px-6">
+      <div className="absolute inset-0 bg-gradient-to-b from-transparent via-indigo-500/[0.03] to-transparent" />
+      <div className="max-w-[1100px] mx-auto relative">
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: '-60px' }}
+          variants={stagger}
+          className="grid grid-cols-2 md:grid-cols-4 gap-6"
+        >
+          {metrics.map((m, i) => (
+            <motion.div
+              key={i}
+              variants={scaleIn}
+              whileHover={{ y: -4, borderColor: 'rgba(99,102,241,0.2)' }}
+              className="relative text-center p-8 rounded-2xl bg-[#111113]/60 border border-white/6 backdrop-blur-sm overflow-hidden group"
+            >
+              <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              <div className="relative">
+                <div className="text-indigo-400 mb-3 flex justify-center">{m.icon}</div>
+                <div className="text-[40px] md:text-[48px] font-[800] text-white tracking-[-0.04em] leading-none mb-2">{m.value}</div>
+                <div className="text-[14px] text-zinc-400 font-[500]">{m.label}</div>
               </div>
-              <h3 className="text-[18px] font-[600] text-[var(--text-primary)] tracking-tight mb-2">Delete Chat Session?</h3>
-              <p className="text-[14px] text-[var(--text-secondary)] leading-relaxed">
-                This action cannot be undone. All messages and visualizations in this session will be permanently deleted.
-              </p>
-            </div>
-            <div className="px-6 py-4 bg-[var(--bg-sidebar)] border-t border-[var(--border-subtle)] flex items-center justify-end gap-3">
-              <button
-                disabled={isProcessing}
-                onClick={() => setShowDeleteConfirm(null)}
-                className="px-4 py-2 text-[14px] font-[500] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] rounded-[8px] transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={isProcessing}
-                onClick={async () => {
-                  if (isProcessing) return;
-                  try {
-                    setIsProcessing(true);
-                    await api.deleteSession(showDeleteConfirm);
-                    const updated = await api.getSessions();
-                    setSessions(updated);
+            </motion.div>
+          ))}
+        </motion.div>
+      </div>
+    </section>
+  );
+}
 
-                    if (showDeleteConfirm === sessionId) {
-                      if (updated.length > 0) {
-                        const nextSession = updated[0].session_id;
-                        setSessionId(nextSession);
-                        localStorage.setItem("insightx_active_session", nextSession);
-                      } else {
-                        setSessionId("");
-                        localStorage.removeItem("insightx_active_session");
-                      }
-                    }
-                  } catch (err) {
-                    console.error("Delete failed", err);
-                  } finally {
-                    setIsProcessing(false);
-                    setShowDeleteConfirm(null);
-                  }
-                }}
-                className={`px-4 py-2 text-[14px] font-[600] text-white bg-[var(--error-text)] hover:bg-red-600 rounded-[8px] transition-colors shadow-sm ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
+/* ─── Security & Trust ─── */
+function SecuritySection() {
+  const items = [
+    { icon: <Lock size={20} />, title: 'Read-Only SQL', desc: 'Only SELECT statements allowed. No data mutation ever.' },
+    { icon: <Shield size={20} />, title: 'SQL Validation', desc: 'Every query is validated and sanitized before execution.' },
+    { icon: <Layers size={20} />, title: 'Secure Sandbox', desc: 'DuckDB in-memory engine. Data never leaves the server.' },
+    { icon: <Globe size={20} />, title: 'Privacy First', desc: 'No user data stored. Session-based ephemeral memory only.' },
+  ];
+
+  return (
+    <section id="security" className="relative py-28 px-6">
+      <div className="max-w-[1000px] mx-auto">
+        <AnimatedSection className="text-center mb-14">
+          <span className="text-[13px] font-[600] text-emerald-400 uppercase tracking-[0.15em] mb-4 block">Trust & Security</span>
+          <h2 className="text-[36px] md:text-[44px] font-[800] text-white tracking-[-0.03em] leading-[1.1]">
+            Enterprise-grade security, <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">by design</span>
+          </h2>
+        </AnimatedSection>
+
+        <motion.div
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true }}
+          variants={stagger}
+          className="grid md:grid-cols-2 gap-5"
+        >
+          {items.map((item, i) => (
+            <motion.div
+              key={i}
+              variants={fadeUp}
+              custom={i}
+              className="flex items-start gap-5 p-6 rounded-xl bg-[#111113]/40 border border-white/5 hover:border-emerald-500/15 transition-colors"
+            >
+              <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0">{item.icon}</div>
+              <div>
+                <h4 className="text-[15px] font-[700] text-white mb-1">{item.title}</h4>
+                <p className="text-[14px] text-zinc-400 leading-[1.6]">{item.desc}</p>
+              </div>
+            </motion.div>
+          ))}
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── CTA ─── */
+function CTASection() {
+  return (
+    <section className="relative py-32 px-6">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.08)_0%,transparent_60%)]" />
+      <AnimatedSection className="max-w-[700px] mx-auto text-center relative">
+        <motion.div
+          whileHover={{ scale: 1.02 }}
+          className="p-12 md:p-16 rounded-3xl bg-gradient-to-b from-[#141420] to-[#0e0e12] border border-white/8 shadow-2xl shadow-indigo-500/5 relative overflow-hidden"
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.1)_0%,transparent_50%)]" />
+          <div className="relative">
+            <Sparkles className="mx-auto text-indigo-400 mb-5" size={36} />
+            <h2 className="text-[32px] md:text-[40px] font-[800] text-white leading-[1.15] tracking-[-0.03em] mb-4">
+              Ready to uncover insights?
+            </h2>
+            <p className="text-[16px] text-zinc-400 mb-8 leading-[1.7] max-w-[440px] mx-auto">
+              Start querying 250,000 UPI transactions with conversational AI. No setup required.
+            </p>
+            <Link href="/dashboard">
+              <motion.button
+                whileHover={{ scale: 1.05, boxShadow: '0 25px 50px rgba(99,102,241,0.35)' }}
+                whileTap={{ scale: 0.97 }}
+                className="group px-10 py-4 bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-500 text-white text-[16px] font-[700] rounded-xl shadow-2xl shadow-indigo-500/30 flex items-center gap-3 mx-auto transition-all"
               >
-                {isProcessing ? 'Deleting...' : 'Delete Chat'}
-              </button>
-            </div>
+                Launch Dashboard
+                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              </motion.button>
+            </Link>
           </div>
+        </motion.div>
+      </AnimatedSection>
+    </section>
+  );
+}
+
+/* ─── Footer ─── */
+function Footer() {
+  return (
+    <footer className="border-t border-white/5 py-10 px-6">
+      <div className="max-w-[1200px] mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <img src="/paytm-logo.png" alt="Paytm" className="h-[14px] w-auto opacity-60" />
+          <span className="text-[14px] text-zinc-500 font-[500]">InsightX &bull; Techfest IIT Bombay 2025-26</span>
         </div>
-      )}
+        <div className="text-[13px] text-zinc-600">
+          Built with Next.js, FastAPI, DuckDB & GPT-4
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+/* ─── Main Page ─── */
+export default function LandingPage() {
+  return (
+    <div className="min-h-screen bg-[#09090b] text-white overflow-x-hidden">
+      <Navbar />
+      <HeroSection />
+      <FeaturesSection />
+      <HowItWorksSection />
+      <MetricsSection />
+      <SecuritySection />
+      <CTASection />
+      <Footer />
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
     Send, Sparkles, Loader2, Lightbulb, ChevronRight,
-    Mic, Paperclip, ChevronDown, Copy, Edit2, Save, Download,
+    Mic, MicOff, ChevronDown, Copy, Edit2, Save, Download,
     Check, ArrowRight, BarChart2, TrendingUp, PieChart, Focus,
     Share, LayoutDashboard, ThumbsUp, ThumbsDown, Database,
     Clock, Code2, Server, TerminalSquare
@@ -320,7 +320,7 @@ const MessageActionRow = ({ msg, question }: { msg: Message; question?: string }
     );
 };
 
-export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any }) => {
+export const ChatWindow = ({ sessionId, stats, sidebarOpen = true, pinnedSessionIds = [], onPinSession }: { sessionId: string, stats: any, sidebarOpen?: boolean, pinnedSessionIds?: string[], onPinSession?: (sessionId: string) => void }) => {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -334,6 +334,74 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
     const [showSlashCmds, setShowSlashCmds] = useState(false);
 
     const [historyLoading, setHistoryLoading] = useState(false);
+
+    // Speech recognition state
+    const [isListening, setIsListening] = useState(false);
+    const recognitionRef = useRef<any>(null);
+
+    // Initialize speech recognition
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                const recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
+
+                recognition.onresult = (event: any) => {
+                    let finalTranscript = '';
+                    let interimTranscript = '';
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        const transcript = event.results[i][0].transcript;
+                        if (event.results[i].isFinal) {
+                            finalTranscript += transcript;
+                        } else {
+                            interimTranscript += transcript;
+                        }
+                    }
+                    if (finalTranscript) {
+                        setInput(prev => prev + finalTranscript);
+                    }
+                };
+
+                recognition.onerror = (event: any) => {
+                    console.error('Speech recognition error:', event.error);
+                    setIsListening(false);
+                    if (event.error === 'not-allowed') {
+                        toast.error('Microphone access denied. Please allow microphone permissions.');
+                    }
+                };
+
+                recognition.onend = () => {
+                    setIsListening(false);
+                };
+
+                recognitionRef.current = recognition;
+            }
+        }
+        return () => {
+            if (recognitionRef.current) {
+                try { recognitionRef.current.stop(); } catch {}
+            }
+        };
+    }, []);
+
+    const toggleListening = () => {
+        if (!recognitionRef.current) {
+            toast.error('Speech recognition is not supported in this browser.');
+            return;
+        }
+        if (isListening) {
+            recognitionRef.current.stop();
+            setIsListening(false);
+            toast.success('Stopped listening');
+        } else {
+            recognitionRef.current.start();
+            setIsListening(true);
+            toast('Listening... Speak now', { icon: '🎤' });
+        }
+    };
 
 
     useEffect(() => {
@@ -509,7 +577,7 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
 
     return (
         <div className="flex-1 flex flex-col w-full relative h-[calc(100vh-60px)] z-0">
-            <div className={`mx-auto w-full pt-[64px] pb-[160px] px-[24px] h-full overflow-y-auto scrollbar-hide transition-all duration-300 ${contextPanelMsg ? 'max-w-[100%] pr-[340px]' : 'max-w-[1100px]'}`}>
+            <div className={`mx-auto w-full pt-[64px] pb-[160px] px-[4px] h-full overflow-y-auto scrollbar-hide transition-all duration-300 ${contextPanelMsg ? 'max-w-[100%] pr-[340px]' : 'max-w-[1100px]'}`}>
 
                 {messages.length === 0 && (
                     <div className="flex flex-col items-center justify-center text-center mt-[10vh] animate-fade-in">
@@ -682,7 +750,7 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
             </div>
 
             {/* V4 Floating Input Box Component */}
-            <div className={`fixed bottom-0 left-0 right-0 z-30 pointer-events-none transition-all duration-300 ${contextPanelMsg ? 'md:pl-[260px] md:pr-[320px]' : 'md:pl-[260px]'}`}>
+            <div className={`fixed bottom-0 left-0 right-0 z-30 pointer-events-none transition-all duration-300 ${contextPanelMsg ? (sidebarOpen ? 'md:pl-[260px]' : 'md:pl-[72px]') + ' md:pr-[320px]' : sidebarOpen ? 'md:pl-[260px]' : 'md:pl-[72px]'}`}>
                 <div className="max-w-[840px] mx-auto w-full p-[16px] pb-[32px] pointer-events-auto flex flex-col items-center">
 
                     {/* Slash Commands Dropdown */}
@@ -728,12 +796,9 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
 
                         <div className="flex justify-between items-center mt-[12px]">
                             <div className="flex items-center gap-[4px] flex-1 text-[var(--text-muted)]">
-                                <button type="button" className="p-[8px] hover:bg-app-custom rounded-[8px] transition-colors flex items-center justify-center">
-                                    <Paperclip size={18} />
-                                </button>
-                                <button type="button" className="py-[6px] px-[10px] hover:bg-app-custom rounded-[8px] transition-colors flex items-center gap-[6px] font-[500] text-[13px] border border-[var(--border-subtle)] ml-[4px]">
+                                <button type="button" className="py-[6px] px-[10px] hover:bg-app-custom rounded-[8px] transition-colors flex items-center gap-[6px] font-[500] text-[13px] border border-[var(--border-subtle)]">
                                     <Database size={14} className="text-[var(--text-secondary)]" />
-                                    <span className="truncate max-w-[140px] text-[var(--text-secondary)]">UWP Transactions DB</span> <ChevronDown size={14} />
+                                    <span className="truncate max-w-[140px] text-[var(--text-secondary)]">UPI Transactions DB</span> <ChevronDown size={14} />
                                 </button>
                             </div>
 
@@ -741,8 +806,13 @@ export const ChatWindow = ({ sessionId, stats }: { sessionId: string, stats: any
                                 <button title="Commands" type="button" onClick={() => setShowSlashCmds(!showSlashCmds)} className="p-[8px] hover:bg-app-custom rounded-[8px] transition-colors text-[var(--text-muted)]">
                                     <span className="text-[12px] font-[600] border border-[var(--border-subtle)] px-[8px] py-[2px] rounded-[6px]">/</span>
                                 </button>
-                                <button type="button" className="p-[8px] hover:bg-app-custom rounded-[8px] transition-colors text-[var(--text-muted)] mx-[4px]">
-                                    <Mic size={20} />
+                                <button
+                                    type="button"
+                                    onClick={toggleListening}
+                                    className={`p-[8px] rounded-[8px] transition-all mx-[4px] ${isListening ? 'bg-red-500/10 text-red-500 animate-pulse' : 'hover:bg-app-custom text-[var(--text-muted)]'}`}
+                                    title={isListening ? 'Stop listening' : 'Start voice input'}
+                                >
+                                    {isListening ? <MicOff size={20} /> : <Mic size={20} />}
                                 </button>
                                 <button
                                     type="submit"

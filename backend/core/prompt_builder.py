@@ -225,6 +225,94 @@ Expected JSON:
 }}
 CRITICAL DENOMINATOR RULE: When computing a failure rate or fraud rate for a specific bank, state, or entity — the denominator MUST be COUNT(*) of that entity's own rows only, computed inside a GROUP BY or WHERE clause. NEVER divide by the total table row count. NEVER run separate COUNT queries for numerator and denominator. Always use a single SELECT with GROUP BY and compute both count and rate in the same query.
 
+Example K — Day of week / weekend analytics:
+Question: "Which day of the week has the most transactions?"
+Expected JSON:
+{{
+  "sql": "SELECT day_of_week, COUNT(*) AS transaction_count FROM transactions GROUP BY day_of_week ORDER BY transaction_count DESC",
+  "query_intent": "Transaction volume by day of week, ranked by count",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "volume"}},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
+
+Example L — Weekend vs weekday comparison:
+Question: "Are weekends seeing higher transaction values than weekdays?"
+Expected JSON:
+{{
+  "sql": "SELECT CASE WHEN is_weekend = 1 THEN 'Weekend' ELSE 'Weekday' END AS period, COUNT(*) AS transaction_count, ROUND(SUM(amount_inr), 2) AS total_value, ROUND(AVG(amount_inr), 2) AS avg_value FROM transactions GROUP BY is_weekend ORDER BY total_value DESC",
+  "query_intent": "Compare weekend vs weekday transaction volume and value",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "total_value"}},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
+
+Example M — User demographics (sender age groups):
+Question: "Which age group sends the most transactions?"
+Expected JSON:
+{{
+  "sql": "SELECT sender_age_group, COUNT(*) AS transaction_count, ROUND(AVG(amount_inr), 2) AS avg_amount FROM transactions GROUP BY sender_age_group ORDER BY transaction_count DESC",
+  "query_intent": "Transaction volume and average amount by sender age group",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "volume"}},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
+
+Example N — Receiver demographics (P2P only, NULL-aware):
+Question: "Which receiver age group handles the largest average payment?"
+Expected JSON:
+{{
+  "sql": "SELECT receiver_age_group, ROUND(AVG(amount_inr), 2) AS avg_amount, COUNT(*) AS transaction_count FROM transactions WHERE receiver_age_group IS NOT NULL GROUP BY receiver_age_group ORDER BY avg_amount DESC",
+  "query_intent": "Average payment amount by receiver age group (P2P only, excluding NULLs)",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "avg_amount_inr"}},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
+
+Example O — Median calculation:
+Question: "What is the median transaction amount for UPI payments?"
+Expected JSON:
+{{
+  "sql": "SELECT ROUND(MEDIAN(amount_inr), 2) AS median_amount, ROUND(AVG(amount_inr), 2) AS avg_amount, COUNT(*) AS total_transactions FROM transactions",
+  "query_intent": "Median and average transaction amount across all UPI payments",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "median_amount"}},
+  "requires_chart": false,
+  "suggested_chart_type": "none"
+}}
+
+Example P — Device/Network insights:
+Question: "Do transactions from mobile devices fail more often than desktop?"
+Expected JSON:
+{{
+  "sql": "SELECT device_type, COUNT(*) AS total_transactions, ROUND(SUM(CASE WHEN transaction_status = 'FAILED' THEN 1.0 ELSE 0 END) * 100.0 / COUNT(*), 2) AS failure_rate FROM transactions GROUP BY device_type ORDER BY failure_rate DESC",
+  "query_intent": "Failure rate comparison by device type (Android, iOS, Web)",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "failure_rate"}},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
+
+Example Q — Receiver bank analysis:
+Question: "Which receiver bank receives the most transactions?"
+Expected JSON:
+{{
+  "sql": "SELECT receiver_bank, COUNT(*) AS transaction_count, ROUND(SUM(amount_inr), 2) AS total_value FROM transactions GROUP BY receiver_bank ORDER BY transaction_count DESC LIMIT 20",
+  "query_intent": "Transaction volume and value by receiver bank, ranked",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{}}, "metric": "volume"}},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
+
+Example R — Cross-dimensional (state + bank combination, merchant + hour):
+Question: "Which merchant categories show the highest failure rates during peak hours?"
+Expected JSON:
+{{
+  "sql": "SELECT merchant_category, hour_of_day, COUNT(*) AS total, ROUND(SUM(CASE WHEN transaction_status = 'FAILED' THEN 1.0 ELSE 0 END) * 100.0 / COUNT(*), 2) AS failure_rate FROM transactions WHERE merchant_category IS NOT NULL AND hour_of_day BETWEEN 18 AND 22 GROUP BY merchant_category, hour_of_day ORDER BY failure_rate DESC LIMIT 20",
+  "query_intent": "Merchant failure rates during evening peak hours (18-22), cross-tabulated",
+  "entities_extracted": {{"transaction_types": [], "states": [], "age_groups": [], "time_filters": {{"peak_hours": true}}, "metric": "failure_rate"}},
+  "requires_chart": true,
+  "suggested_chart_type": "bar"
+}}
+
 RESPONSE FORMAT — Critical:
 Respond with ONLY a valid JSON object. No explanation, no markdown, no code blocks.
 Format:

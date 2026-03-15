@@ -47,18 +47,8 @@ class QueryPipeline:
             return non_data
         
         # Check for compound questions (Multi-Step Decomp)
-        # Verify it's not the first turn (as per user instruction)
-        # Note: User prompt specified "not context.get('turn_count', 0) == 0"
-        # I'll enable it for all turns if clearly compound, but user instruction was specific. 
-        # Actually, "Which state has highest volume and is it above average?" IS valid for Turn 1.
-        # But I will follow the specific snippet request: "if self._is_compound_question(user_question) and not context.get("turn_count", 0) == 0:"
-        # Wait, if I strictly follow "not turn_count == 0", I might fail the test case 4 "Which age group transacts the most..." if it's the first question?
-        # The test spec says "Create one session and run all questions sequentially".
-        # "Multi-step decomposition tests: 4. ..."
-        # Since it's sequential, Q4 is technically NOT the first question in that session (Q1-Q3 preceded it).
-        # So following the instruction strictly is SAFE for the test.
-        
-        if self._is_compound_question(user_question) and not turn_count == 0:
+        # Enable on ALL turns — users may ask multiple questions at once even on turn 1
+        if self._is_compound_question(user_question):
             sub_questions = self._decompose_question(user_question)
             if len(sub_questions) > 1:
                 try:
@@ -412,16 +402,31 @@ class QueryPipeline:
 
     def _is_compound_question(self, question: str) -> bool:
         """
-        Detects if a question requires multi-step reasoning.
+        Detects if a question requires multi-step reasoning or contains
+        multiple distinct questions (e.g., separated by ? marks, newlines,
+        numbered lists, or conjunctions like 'and', 'then', 'also').
         """
         # Guard 1: Short questions are never compound.
-        # <= 7 words covers "Show me transactions from Maharashtra" (6 words).
         if len(question.split()) <= 7:
             return False
 
-        # Guard 2: Simple lookup intent (show/list/get/find/display) with no conjunctions
-        # prevents single-entity location queries from being flagged as compound.
-        q_lower = question.lower()
+        q_lower = question.lower().strip()
+
+        # Detect multiple question marks (2+ distinct questions)
+        question_marks = [i for i, c in enumerate(question) if c == '?']
+        if len(question_marks) >= 2:
+            # Make sure the second ? is not at the very end (i.e. there's real
+            # content between the two question marks)
+            between = question[question_marks[0]+1 : question_marks[1]].strip()
+            if len(between.split()) >= 3:
+                return True
+
+        # Detect numbered lists like "1. ... 2. ..." or "1) ... 2) ..."
+        numbered = re.findall(r'(?:^|\n)\s*\d+[.)\-]\s', question)
+        if len(numbered) >= 2:
+            return True
+
+        # Guard 2: Simple lookup intent with no conjunctions
         simple_verbs = ("show", "list", "get", "find", "display")
         compound_conjunctions = (" and ", "also", "additionally", " then ", "as well")
         if any(q_lower.startswith(v) or f" {v} " in q_lower for v in simple_verbs):
@@ -438,27 +443,40 @@ class QueryPipeline:
             " vs " in q_lower,
             "compare" in q_lower,
             "which" in q_lower and "and what" in q_lower,
-            "how many" in q_lower and "and what" in q_lower
+            "how many" in q_lower and "and what" in q_lower,
+            " then " in q_lower,
         ]
         return any(patterns)
 
     def _decompose_question(self, question: str) -> list[str]:
         prompt = f"""You are decomposing a compound analytics question into sequential sub-questions.
-Each sub-question must be answerable independently with a single SQL query.
+Each sub-question must be answerable independently with a single SQL query against a UPI transactions table.
 The answer to an earlier sub-question may be needed as context for a later one.
+
+RULES:
+1. Maximum 5 sub-questions.
+2. Each sub-question must be a clear, self-contained analytics question.
+3. If the user asked N distinct questions, produce exactly N sub-questions (do not merge or skip).
+4. Preserve the user's original intent — do not rephrase into a different question.
+5. If a question references "that" or "those", keep the reference intact for context resolution.
+
+Example input: "Which bank has the highest failure rate? Which state has the most fraud flags? Compare failure rates between SBI and HDFC."
+Example output: ["Which bank has the highest failure rate?", "Which state has the most fraud flags?", "Compare failure rates between SBI and HDFC."]
+
+Example input: "Which state has the highest fraud_flag rate and which bank is associated with the most flagged transactions?"
+Example output: ["Which state has the highest fraud_flag rate?", "Which bank is associated with the most flagged transactions?"]
 
 Compound question: "{question}"
 
-Respond with ONLY a JSON array of strings. Maximum 3 sub-questions.
-Example: ["Which age group has the highest volume?", "What is the failure rate for that age group?"]
-Keep each sub-question focused and specific."""
+Respond with ONLY a JSON array of strings. No explanation."""
 
         messages = [{"role": "system", "content": prompt}]
         try:
-            # Use temp=0 and primary model as requested
             response_str = self._call_gpt4(messages, temperature=0, expect_json=True)
             clean_json = response_str.replace("```json", "").replace("```", "").strip()
-            return json.loads(clean_json)
+            result = json.loads(clean_json)
+            # Cap at 5 sub-questions to avoid runaway API calls
+            return result[:5] if isinstance(result, list) else [question]
         except Exception as e:
             logger.error(f"Decomposition failed: {e}")
             return [question]
