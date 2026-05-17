@@ -16,12 +16,12 @@ const fadeUp = {
     opacity: 1, y: 0,
     transition: { duration: 0.7, delay: i * 0.12, ease: [0.25, 0.4, 0.25, 1] }
   })
-};
+} as any;
 
 const scaleIn = {
   hidden: { opacity: 0, scale: 0.9 },
   visible: { opacity: 1, scale: 1, transition: { duration: 0.6, ease: [0.25, 0.4, 0.25, 1] } }
-};
+} as any;
 
 const stagger = {
   visible: { transition: { staggerChildren: 0.1 } }
