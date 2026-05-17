@@ -27,6 +27,7 @@ allowed_origins = [
     "https://localhost:3000",
     "http://localhost:3001",
     "https://localhost:3001",
+    "https://query-pilot-ges2.vercel.app",
 ]
 
 frontend_url = os.getenv("FRONTEND_URL", "")
@@ -47,6 +48,14 @@ app.add_middleware(
 app.include_router(chat.router, prefix="/api", tags=["Chat"])
 app.include_router(sessions.router, prefix="/api", tags=["Sessions"])
 app.include_router(dashboard.router, prefix="/api", tags=["Dashboard"])
+
+@app.get("/")
+async def root():
+    return {
+        "message": "InsightX API is live",
+        "health": "/health",
+        "documentation": "/docs"
+    }
 
 @app.get("/health")
 async def health_check():
