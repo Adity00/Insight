@@ -7,6 +7,14 @@ try:
 except ImportError:
     from routers import chat, sessions, dashboard
 
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+logger.info(f"InsightX API starting up... PORT: {os.getenv('PORT', '8000')}")
+
 app = FastAPI(
     title="InsightX API",
     description="Conversational AI analytics for UPI transaction data",
