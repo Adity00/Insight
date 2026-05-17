@@ -28,6 +28,8 @@ allowed_origins = [
     "http://localhost:3001",
     "https://localhost:3001",
     "https://query-pilot-ges2.vercel.app",
+    "https://query-pilot-rho.vercel.app",
+    "https://query-pilot-api.onrender.com",
 ]
 
 frontend_url = os.getenv("FRONTEND_URL", "")
