@@ -1,0 +1,29 @@
+app = "querypilot-api"
+primary_region = "iad"
+
+[build]
+builder = "paketobuildpacks"
+
+[env]
+OPENAI_API_KEY = ""
+
+[[services]]
+internal_port = 8000
+protocol = "tcp"
+
+[[services.ports]]
+port = 80
+handlers = ["http"]
+
+[[services.ports]]
+port = 443
+handlers = ["tls", "http"]
+
+[checks]
+  [checks.http_checks]
+    grace_period = "10s"
+    interval = "30s"
+    method = "get"
+    path = "/docs"
+    protocol = "http"
+    timeout = "5s"
